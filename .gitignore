@@ -1,0 +1,25 @@
+# Racine du dépôt : un dossier par addon, chaque addon a aussi son propre .gitignore.
+# Ce fichier rattrape ce qui atterrirait par erreur à la racine.
+
+# Godot (cache et exports générés)
+.godot/
+.import/
+.mono/
+/android/
+export_credentials.cfg
+
+# Secrets : ne jamais versionner
+.env
+.env.*
+*.keystore
+*.jks
+
+# Node
+node_modules/
+
+# Éditeurs et système
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.tmp
