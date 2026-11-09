@@ -2,6 +2,8 @@
 
 Serveur [MCP](https://modelcontextprotocol.io) permettant à Claude (ou à n'importe quel client MCP) de piloter **Godot 4** : lire et modifier des scènes et des nœuds, écrire des scripts, lancer le jeu et lire ses erreurs.
 
+Le plugin ajoute aussi deux docks dans l'éditeur : une **todo** partagée avec Claude et un **chat Claude** intégré (voir [Docks dans l'éditeur](#docks-dans-léditeur)).
+
 ```
 Client MCP ──stdio──▶ server/ (Node/TypeScript)
                          ├── WebSocket ws://127.0.0.1:6505 ──▶ addons/godot_mcp (plugin éditeur)
@@ -11,7 +13,7 @@ Client MCP ──stdio──▶ server/ (Node/TypeScript)
 - **Tools éditeur** : passent par le plugin, qui doit être actif dans l'éditeur ouvert. Toutes les modifications passent par l'undo/redo de Godot, donc **Ctrl+Z fonctionne**.
 - **Tools CLI** : lancent un processus Godot séparé et fonctionnent même éditeur fermé.
 
-Testé avec Godot 4.7.2. Visé : 4.2+. `get_editor_log` nécessite la 4.5+.
+Testé avec Godot 4.7.2. Visé : 4.2+. `get_editor_log` nécessite la 4.5+. Les docks Todo et Chat ont été testés en 4.5.1, 4.6.2 et 4.7.2 ; le chat exige la 4.5+.
 
 ## Installation
 
@@ -45,6 +47,38 @@ Pour Claude Desktop (`claude_desktop_config.json`) :
 }
 ```
 
+## Docks dans l'éditeur
+
+Deux docks apparaissent à l'activation du plugin. Ce sont de vrais docks Godot : glisse-les par leur onglet vers un autre emplacement, passe-les en fenêtre flottante, ferme-les et rouvre-les depuis le menu *Éditeur* ; Godot retient la position choisie d'une session à l'autre. Par défaut : **Todo** en bas à gauche, **Claude** dans le panneau du bas. Avant la Godot 4.6, les mêmes emplacements sont utilisés via l'ancienne API de docks (pas de fenêtre flottante).
+
+### Todo
+- **Ajouter** : zone de saisie en bas, `Entrée` ajoute, `Maj+Entrée` passe à la ligne.
+- **Modifier** : double-clic, `F2` ou `Entrée` sur une tâche ; `Entrée` valide, `Échap` annule, perdre le focus valide.
+- **Supprimer** : bouton ✕ ou touche `Suppr`, avec une barre « Annuler » pendant quelques secondes (pas de confirmation).
+- **Cocher** : la case, ou `Espace`. Clic droit : marquer « en cours » (▶), *Demander à Claude* (envoie la tâche au chat), supprimer.
+- **Réordonner** : glisser la poignée `⋮⋮`.
+- **Textes longs** : retour à la ligne automatique (jamais de défilement horizontal), tâches de plus de 6 lignes repliées avec « Afficher tout », URL et chemins `res://fichier.gd:12` cliquables.
+- Filtre Toutes / À faire / Faites, compteur, bouton pour vider les tâches faites.
+
+La liste est enregistrée dans `res://.godot_mcp/todo.json` (dossier caché : ignoré par l'import Godot, versionnable ou à ajouter au `.gitignore`). Le dock suit les modifications faites à la main dans ce fichier. Claude peut la lire et la cocher via les tools `todo_*`, que ce soit depuis le chat ou depuis un Claude lancé dans un terminal.
+
+### Chat Claude
+Le dock lance **Claude Code** (`claude -p`, mode `stream-json`) comme processus fils et lui parle comme dans un terminal : mêmes comptes, mêmes MCP, y compris `godot`. Il ne démarre qu'au premier message envoyé et s'arrête avec l'éditeur.
+
+- **Prérequis** : Claude Code installé et connecté (`claude` dans le PATH, ou `~/.local/bin/claude`) ; Godot 4.5+.
+- **Serveur MCP Godot** : renseigne une fois `server/dist/index.js` (bouton *Choisir…* du bandeau, ou *Éditeur > Paramètres de l'éditeur > Godot Mcp > Server Path*). Valable pour tous les projets. Sans cela, le chat utilise les MCP que tu as déclarés avec `claude mcp add`.
+- **Reprendre dans un terminal** : le menu `⋯` copie `claude --resume <id>` ; lance-le depuis le dossier du projet pour continuer la même conversation. Après un redémarrage de l'éditeur, le message suivant reprend automatiquement la conversation en cours (l'affichage de l'historique n'est pas restauré).
+- **Stop** interrompt Claude sans perdre la conversation ; **Nouveau** démarre une nouvelle conversation (l'ancienne reste reprenable).
+- Les réponses sont rendues en Markdown (blocs de code, listes, tableaux, liens). Les appels d'outils apparaissent comme des cartes repliables.
+
+> ⚠️ **Le chat tourne sans demande d'autorisation** (`--permission-mode bypassPermissions`, comme `claude --dangerously-skip-permissions`) : Claude peut lire et écrire des fichiers et exécuter des commandes avec tes droits. N'active le plugin que si c'est ce que tu veux. Pour retirer des outils sans toucher au code, ajoute des arguments dans *Paramètres de l'éditeur > Godot Mcp > Claude Extra Args*, par exemple `--disallowedTools Bash`.
+
+| Paramètre de l'éditeur (`godot_mcp/…`) | Rôle |
+|---|---|
+| `claude_path` | Chemin de l'exécutable `claude` (sinon détecté automatiquement) |
+| `server_path` | Chemin de `server/dist/index.js`, déclaré à Claude comme serveur MCP `godot` |
+| `claude_extra_args` | Arguments supplémentaires passés à `claude` (ex. `--model opus`) |
+
 ## Variables d'environnement
 
 | Variable | Rôle | Défaut |
@@ -73,6 +107,7 @@ Le plugin n'écoute que sur `127.0.0.1`.
 | `run_project` / `run_current_scene` / `stop_project` | F5 / F6 / Stop |
 | `list_files` / `search_classes` / `get_class_info` | Exploration du projet et de l'API Godot |
 | `get_editor_log` | Messages et erreurs de l'éditeur (4.5+) |
+| `todo_list` / `todo_add` / `todo_update` / `todo_remove` | La todo du dock Todo : lire, ajouter, changer le texte / le statut (`open`, `doing`, `done`) / la position, supprimer |
 
 **CLI** (sans éditeur)
 
@@ -109,6 +144,12 @@ godot --headless --editor --path test_project
 cd server && GODOT_PATH=... npm run test:e2e
 ```
 
+Tests unitaires (store de la todo, UI du dock Todo, conversion Markdown, outils de session ; sans éditeur) :
+
+```bash
+godot --headless --path test_project -s tests/unit.gd
+```
+
 Pour tester les tools à la main : `npm run inspector` (MCP Inspector).
 
 ### Structure
@@ -119,10 +160,14 @@ server/src/
   cli.ts          wrapper de l'exécutable Godot
   tools/          définition des tools (zod)
 addons/godot_mcp/
-  plugin.gd       EditorPlugin
+  plugin.gd       EditorPlugin (serveur WebSocket + docks)
   ws_server.gd    serveur WebSocket et dispatch JSON
   mcp_logger.gd   capture du log éditeur (4.5+)
-  commands/       implémentation des commandes (une classe par domaine)
+  dock_host.gd    ajoute un contrôle comme dock (EditorDock 4.6+, ancienne API avant)
+  commands/       implémentation des commandes (une classe par domaine, dont todo_commands.gd)
+  todo/           dock Todo : todo_store.gd (données + fichier), todo_panel.gd, todo_row.gd
+  chat/           dock Claude : claude_session.gd (processus claude), chat_panel.gd, markdown.gd
+  ui/             auto_text_edit.gd (saisie qui grandit), text_links.gd (URL et res:// cliquables)
 ```
 
 Pour ajouter une commande : une méthode dans `addons/godot_mcp/commands/*.gd`, enregistrée dans `register()`, plus un `bridgeTool(...)` du même nom dans `server/src/tools/`.

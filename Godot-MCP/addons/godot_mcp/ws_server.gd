@@ -13,11 +13,16 @@ const COMMAND_SCRIPTS := [
 	preload("commands/scene_commands.gd"),
 	preload("commands/node_commands.gd"),
 	preload("commands/script_commands.gd"),
+	preload("commands/todo_commands.gd"),
 ]
 
 var plugin: EditorPlugin
 ## Ring buffer of editor log lines (Godot 4.5+), or null.
 var logger: Object
+## Todo list shown in the dock (set by the plugin), or null.
+var todo_store: RefCounted
+## Port the server actually listens on (0 when it could not start).
+var listening_port := 0
 
 var _tcp := TCPServer.new()
 var _peers: Array[WebSocketPeer] = []
@@ -36,10 +41,13 @@ func _init(p_plugin: EditorPlugin) -> void:
 
 func start() -> void:
 	var port := DEFAULT_PORT
+	var explicit_port := true
 	if OS.has_environment("GODOT_MCP_PORT"):
 		port = int(OS.get_environment("GODOT_MCP_PORT"))
 	elif ProjectSettings.has_setting("godot_mcp/port"):
 		port = int(ProjectSettings.get_setting("godot_mcp/port"))
+	else:
+		explicit_port = false
 	_token = OS.get_environment("GODOT_MCP_TOKEN")
 	if _token.is_empty() and ProjectSettings.has_setting("godot_mcp/token"):
 		_token = str(ProjectSettings.get_setting("godot_mcp/token"))
@@ -49,13 +57,24 @@ func start() -> void:
 		OS.call("add_logger", logger)
 
 	var err := _tcp.listen(port, "127.0.0.1")
+	if err != OK and not explicit_port:
+		# Another editor (another project) already has the default port: take the next free one.
+		# The chat dock hands this port to its own MCP server; other clients keep using the port they configured.
+		for candidate in range(port + 1, port + 11):
+			if _tcp.listen(candidate, "127.0.0.1") == OK:
+				print("[Godot MCP] port %d is in use (another editor?), using %d instead" % [port, candidate])
+				port = candidate
+				err = OK
+				break
 	if err != OK:
 		push_error("[Godot MCP] Cannot listen on 127.0.0.1:%d (%s). Is another editor already running the plugin?" % [port, error_string(err)])
 		return
+	listening_port = port
 	print("[Godot MCP] listening on 127.0.0.1:%d" % port)
 
 
 func stop() -> void:
+	listening_port = 0
 	for peer in _peers:
 		peer.close()
 	_peers.clear()

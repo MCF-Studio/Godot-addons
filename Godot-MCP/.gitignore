@@ -5,3 +5,4 @@ test_project/generated/
 # Junction to ../../addons/godot_mcp (see README)
 test_project/addons/
 *.zip
+test_project/.godot_mcp/

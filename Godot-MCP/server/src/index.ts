@@ -8,6 +8,7 @@ import type { Ctx } from "./tools/common.js";
 import { registerProjectTools } from "./tools/project.js";
 import { registerSceneTools } from "./tools/scene.js";
 import { registerScriptTools } from "./tools/script.js";
+import { registerTodoTools } from "./tools/todo.js";
 
 const host = process.env.GODOT_MCP_HOST ?? "127.0.0.1";
 const port = Number(process.env.GODOT_MCP_PORT ?? 6505);
@@ -18,7 +19,8 @@ const server = new McpServer(
     instructions:
       "Controls Godot 4. Editor tools (scenes, nodes, scripts, run) need the Godot editor open with the 'Godot MCP' plugin enabled; " +
       "start with get_editor_state. CLI tools (godot_version, run_and_capture, check_script, export_project) work without the editor. " +
-      "Node paths are relative to the edited scene root ('.' = root). Use run_and_capture to read game output and errors.",
+      "Node paths are relative to the edited scene root ('.' = root). Use run_and_capture to read game output and errors. " +
+      "The editor's Todo dock is shared with the user: todo_list / todo_add / todo_update / todo_remove (set a task to `doing` when you start it and `done` when finished).",
   },
 );
 
@@ -31,6 +33,7 @@ const ctx: Ctx = {
 registerProjectTools(ctx);
 registerSceneTools(ctx);
 registerScriptTools(ctx);
+registerTodoTools(ctx);
 registerCliTools(ctx);
 
 await server.connect(new StdioServerTransport());
