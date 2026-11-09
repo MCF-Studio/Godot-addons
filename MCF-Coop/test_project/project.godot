@@ -1,0 +1,9 @@
+; Projet de test de l'addon mcf_coop (addons/mcf_coop est une jonction vers ../../addons/mcf_coop, voir README).
+config_version=5
+
+[application]
+
+config/name="MCF Coop Test"
+config/version="1.0.0"
+config/features=PackedStringArray("4.7")
+config/icon="res://icon.svg"

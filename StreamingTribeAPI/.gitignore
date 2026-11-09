@@ -1,0 +1,4 @@
+test_project/.godot/
+# Jonction vers ../addons/StreamingTribeAPI (voir README)
+test_project/addons/
+*.zip

@@ -1,0 +1,13 @@
+; Projet de test de l'addon StreamingTribeAPI (addons/StreamingTribeAPI est une jonction vers ../../addons/StreamingTribeAPI, voir README).
+config_version=5
+
+[application]
+
+config/name="StreamingTribeAPI Test"
+config/version="1.0.0"
+config/features=PackedStringArray("4.7")
+config/icon="res://icon.svg"
+
+[autoload]
+
+ST_API="*res://addons/StreamingTribeAPI/main.gd"

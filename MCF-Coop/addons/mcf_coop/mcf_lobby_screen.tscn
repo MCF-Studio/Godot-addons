@@ -1,0 +1,112 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/mcf_coop/mcf_lobby_screen.gd" id="1_screen"]
+[ext_resource type="Script" path="res://addons/mcf_coop/mcf_lobby.gd" id="2_lobby"]
+
+[node name="McfLobbyScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_screen")
+
+[node name="Lobby" type="Node" parent="."]
+script = ExtResource("2_lobby")
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Center"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Center/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="Box" type="VBoxContainer" parent="Center/Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+text = "Jouer en réseau"
+horizontal_alignment = 1
+
+[node name="NameEdit" type="LineEdit" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Ton nom"
+
+[node name="Sep1" type="HSeparator" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+
+[node name="HostTitle" type="Label" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+text = "Héberger une partie"
+
+[node name="PortSpin" type="SpinBox" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+prefix = "Port (UDP) : "
+
+[node name="PlayersSpin" type="SpinBox" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+prefix = "Joueurs max : "
+
+[node name="HostButton" type="Button" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Héberger"
+
+[node name="AddressesTitle" type="Label" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+text = "Adresses à donner à tes amis (même réseau) :"
+
+[node name="Addresses" type="VBoxContainer" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Sep2" type="HSeparator" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+
+[node name="JoinTitle" type="Label" parent="Center/Panel/Margin/Box"]
+layout_mode = 2
+text = "Rejoindre une partie"
+
+[node name="AddressEdit" type="LineEdit" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Adresse de l'hôte (192.168.1.20)"
+
+[node name="JoinPortSpin" type="SpinBox" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+prefix = "Port (UDP) : "
+
+[node name="JoinButton" type="Button" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rejoindre"
+
+[node name="StatusLabel" type="Label" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="CancelButton" type="Button" parent="Center/Panel/Margin/Box"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "Annuler"
