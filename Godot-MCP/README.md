@@ -32,15 +32,17 @@ Copie `addons/godot_mcp/` dans le dossier `addons/` de ton projet, puis active *
 
 ### 3. Déclarer le serveur dans Claude Code
 ```bash
-claude mcp add godot -e GODOT_PATH="C:/chemin/Godot_v4.x-stable_win64.exe" -- node I:/game_dev/Godot-MCP/server/dist/index.js
+claude mcp add godot -e GODOT_PATH="C:/chemin/Godot_v4.x-stable_win64.exe" -- node /chemin/vers/Godot-MCP/server/dist/index.js
 ```
+`/chemin/vers/Godot-MCP` est le dossier de cet addon sur ta machine (celui qui contient ce README).
+
 Pour Claude Desktop (`claude_desktop_config.json`) :
 ```json
 {
   "mcpServers": {
     "godot": {
       "command": "node",
-      "args": ["I:/game_dev/Godot-MCP/server/dist/index.js"],
+      "args": ["/chemin/vers/Godot-MCP/server/dist/index.js"],
       "env": { "GODOT_PATH": "C:/chemin/Godot_v4.x-stable_win64.exe" }
     }
   }
