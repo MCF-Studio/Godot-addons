@@ -1,0 +1,7 @@
+node_modules/
+server/dist/
+test_project/.godot/
+test_project/generated/
+# Junction to ../../addons/godot_mcp (see README)
+test_project/addons/
+*.zip
