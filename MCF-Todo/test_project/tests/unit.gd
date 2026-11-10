@@ -26,7 +26,9 @@ func _initialize() -> void:
 	_test_todo_bom()
 	_test_todo_external_edit()
 	_test_links()
+	_test_todo_markdown()
 	await _test_todo_panel()
+	await _test_todo_copy()
 	await _test_todo_actions()
 	print("
 " + ("%d FAILURE(S)" % failures if failures else "ALL PASSED"))
@@ -244,4 +246,57 @@ func _test_todo_actions() -> void:
 	panel._on_context(item["id"], Vector2.ZERO)
 	check(panel._menu_actions.is_empty(), "todo actions: sans action enregistrée, le menu reste celui de base")
 	panel._menu.hide()
+	panel.queue_free()
+
+
+func _test_todo_markdown() -> void:
+	var items := [
+		{"id": "a", "text": "Corriger le saut", "status": "doing"},
+		{"id": "b", "text": "Écran de game over\navec le score\n\nbouton rejouer", "status": "open"},
+		{"id": "c", "text": "Équilibrer les ennemis", "status": "done"},
+	]
+	var all := "- [ ] (en cours) Corriger le saut\n- [ ] Écran de game over\n  avec le score\n\n  bouton rejouer\n- [x] Équilibrer les ennemis\n"
+	check(TodoStore.to_markdown(items, true) == all, "markdown: ordre conservé, [x] pour fait, (en cours), lignes suivantes indentées")
+	check(TodoStore.to_markdown(items, false) == "- [ ] (en cours) Corriger le saut\n- [ ] Écran de game over\n  avec le score\n\n  bouton rejouer\n", "markdown: sans les tâches faites")
+	check(TodoStore.to_markdown(items, true, "  Mon jeu ").begins_with("# Todo — Mon jeu\n\n- [ ] (en cours)"), "markdown: titre du projet")
+	check(TodoStore.to_markdown([], true).is_empty() and TodoStore.to_markdown([items[2]], false).is_empty(), "markdown: rien à exporter = chaîne vide")
+	check(TodoStore.to_markdown([{"text": "   ", "status": "open"}], true).is_empty(), "markdown: une tâche vide est ignorée")
+
+
+## Menu « Copier » : texte, entrées grisées, export en fichier, retour visuel.
+func _test_todo_copy() -> void:
+	var store := TodoStore.new(_fresh("copy.json"))
+	var panel := TodoPanel.new(store)
+	panel.size = Vector2(320, 300)
+	root.add_child(panel)
+	await process_frame
+	var popup: PopupMenu = panel._copy_button.get_popup()
+	var disabled := func(id: int) -> bool: return popup.is_item_disabled(popup.get_item_index(id))
+	panel._update_copy_menu()
+	check(disabled.call(TodoPanel.COPY_ACTIVE) and disabled.call(TodoPanel.COPY_ALL) and disabled.call(TodoPanel.EXPORT_FILE), "todo copy: liste vide, toutes les entrées sont grisées")
+
+	store.add("alpha")
+	store.add("beta", "done")
+	panel._update_copy_menu()
+	check(not disabled.call(TodoPanel.COPY_ACTIVE) and not disabled.call(TodoPanel.COPY_ALL) and not disabled.call(TodoPanel.EXPORT_FILE), "todo copy: avec des tâches, les entrées sont actives")
+	store.update(store.items[0]["id"], {"status": "done"})
+	panel._update_copy_menu()
+	check(disabled.call(TodoPanel.COPY_ACTIVE) and not disabled.call(TodoPanel.COPY_ALL), "todo copy: que des tâches faites = « à faire » grisé, « tout » actif")
+	panel._on_copy_menu(TodoPanel.COPY_ACTIVE)
+	check(panel._copy_button.text == "Rien à copier", "todo copy: rien à copier est signalé sans rien mettre dans le presse-papiers")
+
+	store.update(store.items[0]["id"], {"status": "open"})
+	panel._on_copy_menu(TodoPanel.COPY_ALL)
+	if DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		check(panel._copy_button.text == "Copié ✓ (2)", "todo copy: retour visuel avec le nombre de tâches copiées")
+		check(DisplayServer.clipboard_get() == panel.markdown(true), "todo copy: le Markdown est dans le presse-papiers")
+	else:
+		check(panel._copy_button.text == "Presse-papiers indisponible", "todo copy: sans presse-papiers (headless), le bouton le dit au lieu d'échouer")
+
+	var base := _fresh("export_test")
+	check(panel.export_to_file(base) == OK and FileAccess.file_exists(base + ".md"), "todo copy: l'export ajoute .md quand le nom n'a pas d'extension")
+	check(FileAccess.get_file_as_string(base + ".md") == panel.markdown(true) and FileAccess.get_file_as_string(base + ".md").contains("- [x] beta"), "todo copy: le fichier exporté contient toute la liste")
+	check(panel.export_to_file("Z:/dossier/inexistant/x.md") != OK, "todo copy: un chemin impossible renvoie une erreur")
+	store.remove([store.items[0]["id"], store.items[1]["id"]])
+	check(panel.export_to_file(tmp_dir.path_join("vide.md")) == ERR_UNCONFIGURED, "todo copy: pas d'export d'une liste vide")
 	panel.queue_free()

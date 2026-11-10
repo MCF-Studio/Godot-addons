@@ -4,6 +4,7 @@ extends VBoxContainer
 
 const AutoTextEdit = preload("ui/auto_text_edit.gd")
 const TodoRow = preload("todo_row.gd")
+const TodoStore = preload("todo_store.gd")
 
 ## Other addons can add entries to the task context menu: append {"label": String, "callable": Callable}
 ## to the Array stored in Engine metadata under this name; the Callable receives the task (Dictionary:
@@ -18,6 +19,13 @@ const MENU_DELETE := 4
 const MENU_ACTION_BASE := 100
 const UNDO_BAR_SECONDS := 6.0
 
+## "Copier" menu: give the list to an AI (Markdown on the clipboard) or save it to a file.
+const COPY_ACTIVE := 0
+const COPY_ALL := 1
+const EXPORT_FILE := 2
+const COPY_LABEL := "Copier ▾"
+const COPY_FEEDBACK_SECONDS := 1.8
+
 var store: RefCounted
 
 var _filter := "all"
@@ -26,6 +34,9 @@ var _warning_bar: PanelContainer
 var _warning_label: Label
 var _counter: Label
 var _clear_done: Button
+var _copy_button: MenuButton
+var _copy_timer: Timer
+var _export_dialog: FileDialog
 var _scroll: ScrollContainer
 var _rows: VBoxContainer
 var _empty: Label
@@ -98,6 +109,23 @@ func _build() -> void:
 	_counter.modulate.a = 0.7
 	_counter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bar.add_child(_counter)
+	_copy_button = MenuButton.new()
+	_copy_button.text = COPY_LABEL
+	_copy_button.flat = true
+	_copy_button.focus_mode = Control.FOCUS_NONE
+	_copy_button.tooltip_text = "Copier la liste en Markdown pour la donner à une IA, ou l'exporter dans un fichier"
+	var copy_popup := _copy_button.get_popup()
+	copy_popup.add_item("Copier les tâches à faire", COPY_ACTIVE)
+	copy_popup.add_item("Copier toute la liste", COPY_ALL)
+	copy_popup.add_separator()
+	copy_popup.add_item("Exporter en fichier Markdown…", EXPORT_FILE)
+	copy_popup.about_to_popup.connect(_update_copy_menu)
+	copy_popup.id_pressed.connect(_on_copy_menu)
+	bar.add_child(_copy_button)
+	_copy_timer = Timer.new()
+	_copy_timer.one_shot = true
+	_copy_timer.timeout.connect(func(): _copy_button.text = COPY_LABEL)
+	add_child(_copy_timer)
 	_clear_done = Button.new()
 	_clear_done.flat = true
 	_clear_done.focus_mode = Control.FOCUS_NONE
@@ -312,6 +340,94 @@ func _scroll_to_bottom() -> void:
 ## Focuses the input so a task can be typed right away.
 func focus_input() -> void:
 	_input.grab_focus()
+
+
+# --- Copy / export -----------------------------------------------------------
+
+func _project_title() -> String:
+	return str(ProjectSettings.get_setting("application/config/name", ""))
+
+
+## The list as Markdown (see TodoStore.to_markdown). "" when there is nothing to give.
+func markdown(include_done: bool) -> String:
+	return TodoStore.to_markdown(store.items, include_done, _project_title())
+
+
+func _count_exportable(include_done: bool) -> int:
+	var count := 0
+	for item in store.items:
+		if include_done or item["status"] != "done":
+			count += 1
+	return count
+
+
+## Grey out what would produce an empty text.
+func _update_copy_menu() -> void:
+	var popup := _copy_button.get_popup()
+	popup.set_item_disabled(popup.get_item_index(COPY_ACTIVE), _count_exportable(false) == 0)
+	popup.set_item_disabled(popup.get_item_index(COPY_ALL), _count_exportable(true) == 0)
+	popup.set_item_disabled(popup.get_item_index(EXPORT_FILE), _count_exportable(true) == 0)
+
+
+func _flash_copy(message: String) -> void:
+	_copy_button.text = message
+	_copy_timer.start(COPY_FEEDBACK_SECONDS)
+
+
+func _on_copy_menu(id: int) -> void:
+	match id:
+		COPY_ACTIVE, COPY_ALL:
+			var include_done := id == COPY_ALL
+			var text := markdown(include_done)
+			if text.is_empty():
+				_flash_copy("Rien à copier")
+				return
+			if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+				_flash_copy("Presse-papiers indisponible")  # ex. éditeur lancé en headless : il reste l'export en fichier
+				return
+			DisplayServer.clipboard_set(text)
+			var count := _count_exportable(include_done)
+			_flash_copy("Copié ✓ (%d)" % count)
+		EXPORT_FILE:
+			_open_export_dialog()
+
+
+func _open_export_dialog() -> void:
+	if _export_dialog == null:
+		_export_dialog = FileDialog.new()
+		_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		_export_dialog.add_filter("*.md", "Markdown")
+		_export_dialog.title = "Exporter la todo"
+		_export_dialog.size = Vector2i(760, 480)
+		_export_dialog.file_selected.connect(_on_export_path)
+		add_child(_export_dialog)
+	_export_dialog.current_dir = ProjectSettings.globalize_path("res://").trim_suffix("/")
+	_export_dialog.current_file = "todo.md"
+	_export_dialog.popup_centered()
+
+
+func _on_export_path(path: String) -> void:
+	var err := export_to_file(path)
+	if err == OK:
+		_flash_copy("Exporté ✓")
+	else:
+		_show_warning("Export impossible vers %s (%s)." % [path, error_string(err)])
+
+
+## Writes the whole list (done tasks included) as Markdown. Adds ".md" when the name has no extension.
+func export_to_file(path: String) -> int:
+	if path.get_extension().is_empty():
+		path += ".md"
+	var text := markdown(true)
+	if text.is_empty():
+		return ERR_UNCONFIGURED
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	file.store_string(text)
+	file.close()
+	return OK
 
 
 # --- Context menu ------------------------------------------------------------

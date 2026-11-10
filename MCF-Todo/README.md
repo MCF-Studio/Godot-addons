@@ -24,8 +24,32 @@ Il s'associe, sans en dépendre, à l'addon [Godot MCP](../Godot-MCP/) : Claude 
 | Réordonner | Glisser la poignée `⋮⋮`. Un trait indique où la tâche va atterrir. |
 | Naviguer | `↑` / `↓` entre les tâches. |
 | Filtrer | *Toutes* / *À faire* / *Faites* ; compteur « faites/total » ; bouton pour vider les tâches faites (annulable). |
+| Donner à une IA | Bouton **Copier ▾** : Markdown dans le presse-papiers, ou export en fichier (voir [Donner sa todo à une IA](#donner-sa-todo-à-une-ia)). |
 
 **Textes longs** : le texte passe à la ligne selon la largeur du dock, sans défilement horizontal (même une URL de 300 caractères). Au-delà de 6 lignes, la tâche est repliée avec « Afficher tout (+N lignes) ». Les URL `http(s)://…` et les chemins `res://dossier/fichier.gd:12` sont cliquables (ouvrent le navigateur, la scène ou le script à la bonne ligne).
+
+## Donner sa todo à une IA
+
+Le bouton **Copier ▾** du dock met la liste dans le presse-papiers en Markdown, prête à coller dans n'importe quelle IA (ChatGPT, Claude, Gemini…) ou dans une issue :
+
+| Entrée | Effet |
+|---|---|
+| *Copier les tâches à faire* | tâches ouvertes et « en cours » |
+| *Copier toute la liste* | toutes les tâches, les faites comprises |
+| *Exporter en fichier Markdown…* | écrit toute la liste dans un `.md` à l'endroit choisi (`todo.md` proposé ; l'extension `.md` est ajoutée si tu l'oublies) |
+
+Le bouton confirme (« Copié ✓ (5) » : nombre de tâches) ; les entrées sont grisées quand il n'y a rien à donner.
+
+```markdown
+# Todo — Mon jeu
+
+- [ ] (en cours) Corriger le saut du joueur
+- [ ] Écran de game over
+  avec le score final
+- [x] Équilibrer les ennemis
+```
+
+L'ordre de la liste est conservé, `[x]` marque une tâche faite, `(en cours)` une tâche en cours, et les lignes suivantes d'une tâche sont indentées sous leur puce (la liste reste du Markdown valide). Le titre est le nom du projet. Si l'éditeur n'a pas de presse-papiers (lancé en headless), le bouton le dit et l'export en fichier reste disponible.
 
 ## Données
 
@@ -65,7 +89,7 @@ Engine.set_meta("mcf_todo_actions", actions)
 # à la désactivation du plugin : retirer son entrée de la liste
 ```
 
-API du `TodoStore` : `items`, `find_index(id)`, `get_item(id)`, `counts()`, `add(text, status, index, source)`, `update(id, {text, status}, source)`, `move(id, to_index, source)`, `remove(ids, source)`, `clear_done(source)`, `undo_remove(source)`, `flush()` ; signaux `changed(source)` (`"ui"`, `"mcp"` ou `"external"`) et `warning(message)`. Après une modification, appeler `flush()` pour écrire tout de suite (sinon l'écriture est différée d'environ 300 ms).
+API du `TodoStore` : `items`, `find_index(id)`, `get_item(id)`, `counts()`, `add(text, status, index, source)`, `update(id, {text, status}, source)`, `move(id, to_index, source)`, `remove(ids, source)`, `clear_done(source)`, `undo_remove(source)`, `flush()`, et la fonction statique `to_markdown(items, include_done, title)` (texte de la section ci-dessus) ; signaux `changed(source)` (`"ui"`, `"mcp"` ou `"external"`) et `warning(message)`. Après une modification, appeler `flush()` pour écrire tout de suite (sinon l'écriture est différée d'environ 300 ms).
 
 ## Tests
 
@@ -79,7 +103,7 @@ New-Item -ItemType Junction -Path test_project\addons\mcf_todo -Target addons\mc
 godot --headless --path test_project -s tests/unit.gd
 ```
 
-Les tests couvrent le store (ajout, déplacement, suppression et annulation, persistance, reprise après un crash entre écriture et renommage, JSON corrompu, BOM de Notepad, modification externe), l'UI du dock (ajout, case à cocher sans reconstruction des lignes, filtres, glisser-déposer, suppression + annulation, édition sur place, texte long replié, édition protégée contre les changements externes) et les entrées de menu ajoutées par d'autres addons.
+Les tests couvrent le store (ajout, déplacement, suppression et annulation, persistance, reprise après un crash entre écriture et renommage, JSON corrompu, BOM de Notepad, modification externe), l'UI du dock (ajout, case à cocher sans reconstruction des lignes, filtres, glisser-déposer, suppression + annulation, édition sur place, texte long replié, édition protégée contre les changements externes, menu Copier : texte, entrées grisées, export en fichier), le format Markdown et les entrées de menu ajoutées par d'autres addons.
 
 ## Structure
 

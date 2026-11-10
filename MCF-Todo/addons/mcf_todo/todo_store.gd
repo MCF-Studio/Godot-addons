@@ -72,6 +72,34 @@ static func clean_text(text: String) -> String:
 	return text
 
 
+## Markdown task list, ready to paste to an AI or a chat. The list order is kept; a multi-line task keeps
+## its extra lines indented under its bullet so the list stays valid Markdown.
+## include_done = false keeps only the tasks still to do (open and in progress).
+## Returns "" when there is nothing to export.
+static func to_markdown(list: Array, include_done: bool = true, title: String = "") -> String:
+	var lines := PackedStringArray()
+	for item in list:
+		var status := str(item.get("status", "open"))
+		if status == "done" and not include_done:
+			continue
+		var text := clean_text(str(item.get("text", "")))
+		if text.is_empty():
+			continue
+		var parts := text.split("\n")
+		var first := "- [x] " if status == "done" else "- [ ] "
+		if status == "doing":
+			first += "(en cours) "
+		lines.append(first + parts[0])
+		for i in range(1, parts.size()):
+			lines.append("  " + parts[i] if not parts[i].strip_edges().is_empty() else "")
+	if lines.is_empty():
+		return ""
+	var out := ""
+	if not title.strip_edges().is_empty():
+		out = "# Todo — %s\n\n" % title.strip_edges()
+	return out + "\n".join(lines) + "\n"
+
+
 # --- Mutations ---------------------------------------------------------------
 
 ## Adds a task and returns it, or {} when the text is empty. index -1 = at the end, 0 = at the top.
