@@ -17,7 +17,10 @@ func register(h: Dictionary) -> void:
 
 
 func _store():
-	var store = Engine.get_meta(META_STORE, null)
+	# has_meta first: get_meta(key, null) prints an engine error when the key is absent.
+	if not Engine.has_meta(META_STORE):
+		return err(NOT_AVAILABLE)
+	var store = Engine.get_meta(META_STORE)
 	if store == null:
 		return err(NOT_AVAILABLE)
 	return store

@@ -10,6 +10,8 @@ const ClaudeSession = preload("claude_session.gd")
 const MENU_COPY_RESUME := 0
 const MENU_PICK_SERVER := 1
 const MENU_PICK_CLAUDE := 2
+const MENU_COPY_TERMINAL := 3
+const MENU_COPY_DESKTOP := 4
 const MAX_RESULT_CHARS := 4000
 const GREEN := Color(0.45, 0.8, 0.45)
 const ORANGE := Color(1.0, 0.7, 0.25)
@@ -110,10 +112,13 @@ func _build() -> void:
 	_menu.text = "⋯"
 	_menu.flat = true
 	var popup := _menu.get_popup()
-	popup.add_item("Copier la commande de reprise (terminal)", MENU_COPY_RESUME)
+	popup.add_item("Connecter Claude Code (terminal) à cet éditeur : copier la commande", MENU_COPY_TERMINAL)
+	popup.add_item("Connecter Claude Desktop à cet éditeur : copier la config", MENU_COPY_DESKTOP)
 	popup.add_separator()
-	popup.add_item("Choisir le serveur MCP Godot (index.js)…", MENU_PICK_SERVER)
-	popup.add_item("Choisir l'exécutable claude…", MENU_PICK_CLAUDE)
+	popup.add_item("Reprendre cette conversation dans un terminal : copier la commande", MENU_COPY_RESUME)
+	popup.add_separator()
+	popup.add_item("Avancé : utiliser un autre fichier serveur MCP…", MENU_PICK_SERVER)
+	popup.add_item("Avancé : choisir l'exécutable claude…", MENU_PICK_CLAUDE)
 	popup.id_pressed.connect(_on_menu)
 	bar.add_child(_menu)
 
@@ -128,7 +133,7 @@ func _build() -> void:
 	banner_line.add_child(_banner_label)
 	_banner_pick = Button.new()
 	_banner_pick.text = "Choisir…"
-	_banner_pick.pressed.connect(func(): _pick_file(ClaudeSession.SETTING_SERVER_PATH, "*.js", "Serveur MCP Godot"))
+	_banner_pick.pressed.connect(func(): _pick_file(ClaudeSession.SETTING_SERVER_PATH, "*.mjs, *.js", "Serveur MCP Godot"))
 	banner_line.add_child(_banner_pick)
 	add_child(_banner)
 
@@ -239,8 +244,7 @@ func _on_init(info: Dictionary) -> void:
 	if godot_ok:
 		_banner.hide()
 	else:
-		var detail := "" if seen.is_empty() else " (%s)" % ", ".join(seen)
-		_show_banner("Le MCP Godot n'est pas connecté à ce Claude%s : il ne pourra pas piloter l'éditeur. Indique l'emplacement de server/dist/index.js." % detail, true)
+		_show_missing_mcp_banner(seen)
 
 
 func _on_block_started(kind: String) -> void:
@@ -496,6 +500,18 @@ func _refresh_header() -> void:
 	_send_button.text = "Envoyer"
 
 
+## Why this Claude cannot drive the editor, and the one thing to do about it.
+func _show_missing_mcp_banner(seen: Array) -> void:
+	var info: Dictionary = session.server_info
+	if str(info["source"]).is_empty():
+		_show_banner("Le serveur MCP n'est pas dans l'addon (installation depuis les sources ? lance « npm run build » dans Godot-MCP/server). Tu peux aussi désigner un fichier serveur.", true)
+	elif not session.node_ok:
+		_show_banner("Node.js est introuvable : il fait tourner le serveur MCP qui relie Claude à l'éditeur. Installe-le (nodejs.org) puis relance Godot.", false)
+	else:
+		var status := "" if seen.is_empty() else " (%s)" % ", ".join(seen)
+		_show_banner("Le MCP Godot n'a pas pu démarrer%s : Claude ne pourra pas piloter l'éditeur. Serveur utilisé : %s. Détails dans la sortie de l'éditeur." % [status, info["path"]], false)
+
+
 func _show_banner(message: String, offer_pick: bool) -> void:
 	_banner_label.text = message
 	_banner_pick.visible = offer_pick
@@ -505,12 +521,41 @@ func _show_banner(message: String, offer_pick: bool) -> void:
 func _on_menu(id: int) -> void:
 	match id:
 		MENU_COPY_RESUME:
-			DisplayServer.clipboard_set(session.resume_command())
-			_add_notice("Copié : %s\n(à lancer depuis %s)" % [session.resume_command(), session.project_dir()], false)
+			_copy_to_clipboard(session.resume_command(), "Copié : %s\n(à lancer depuis %s)" % [session.resume_command(), session.project_dir()])
+		MENU_COPY_TERMINAL:
+			var server := _server_for_connect()
+			if not server.is_empty():
+				var command := ClaudeSession.terminal_command(server, _editor_port())
+				_copy_to_clipboard(command, "Copié. Colle-le dans un terminal ouvert dans le dossier du projet (%s) :\n%s\nIl faut Node.js sur cette machine." % [session.project_dir(), command])
+		MENU_COPY_DESKTOP:
+			var server := _server_for_connect()
+			if not server.is_empty():
+				_copy_to_clipboard(ClaudeSession.desktop_config(server, _editor_port()), "Copié. À ajouter dans claude_desktop_config.json (clé « mcpServers »), puis redémarre Claude Desktop. Il faut Node.js sur cette machine.")
 		MENU_PICK_SERVER:
-			_pick_file(ClaudeSession.SETTING_SERVER_PATH, "*.js", "Serveur MCP Godot")
+			_pick_file(ClaudeSession.SETTING_SERVER_PATH, "*.mjs, *.js", "Serveur MCP Godot")
 		MENU_PICK_CLAUDE:
 			_pick_file(ClaudeSession.SETTING_CLAUDE_PATH, "*.exe, *", "Exécutable claude")
+
+
+func _editor_port() -> int:
+	return session.godot_port if session.godot_port > 0 else ClaudeSession.DEFAULT_WS_PORT
+
+
+## Path of the MCP server file to hand to another Claude, or "" (with an explanation in the transcript).
+func _server_for_connect() -> String:
+	var info := session.refresh_server_info()
+	if str(info["source"]).is_empty():
+		_add_notice("Le serveur MCP est introuvable : il est livré dans l'addon (dossier server/) ; depuis les sources, lance « npm run build » dans Godot-MCP/server.", true)
+		return ""
+	return str(info["path"])
+
+
+func _copy_to_clipboard(text: String, message: String) -> void:
+	if not DisplayServer.has_feature(DisplayServer.FEATURE_CLIPBOARD):
+		_add_notice("Presse-papiers indisponible sur cette plateforme. À copier à la main :\n" + text, true)
+		return
+	DisplayServer.clipboard_set(text)
+	_add_notice(message, false)
 
 
 func _pick_file(setting: String, filter: String, description: String) -> void:

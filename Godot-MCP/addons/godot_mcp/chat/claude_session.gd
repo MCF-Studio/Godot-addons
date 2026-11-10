@@ -20,7 +20,12 @@ signal notice(message: String, is_error: bool)
 signal state_changed
 
 const SETTING_CLAUDE_PATH := "godot_mcp/claude_path"
+## Advanced override: another MCP server file. Normally unused: the addon ships its own (BUNDLED_SERVER).
 const SETTING_SERVER_PATH := "godot_mcp/server_path"
+## MCP server shipped inside the addon (single file, built by Godot-MCP/server: npm run build), relative to the addon folder.
+const BUNDLED_SERVER := "server/godot-mcp-server.mjs"
+## Port the MCP server uses when GODOT_MCP_PORT is not set (same as ws_server.gd).
+const DEFAULT_WS_PORT := 6505
 const SETTING_EXTRA_ARGS := "godot_mcp/claude_extra_args"
 const STATE_FILE := "res://.godot/godot_mcp_chat.json"
 const MCP_CONFIG_FILE := "res://.godot/godot_mcp_mcp.json"
@@ -47,6 +52,11 @@ var last_error := ""
 ## Port of this editor's WebSocket server (0 = not listening). The MCP server given to claude must use
 ## it, otherwise a second editor open on another project would drive the first one.
 var godot_port := 0
+## Which MCP server file the chat hands to claude: {"path": String, "source": "setting" | "bundled" | ""}.
+## Empty source = none found. Filled by refresh_server_info() (and at each start of claude).
+var server_info := {"path": "", "source": ""}
+## False when Node.js, which runs the MCP server, was not found on this machine.
+var node_ok := true
 
 var _pid := -1
 var _stdio: FileAccess
@@ -234,17 +244,77 @@ func _build_args() -> PackedStringArray:
 	return args
 
 
-## --mcp-config with the godot MCP server, when its location is known (Editor Settings > Godot Mcp).
-## Otherwise claude uses whatever MCP servers the user declared with `claude mcp add`.
-func _write_mcp_config() -> String:
+## Folder of this addon ("res://addons/godot_mcp"), wherever the user put it.
+func addon_dir() -> String:
+	return (get_script() as Script).resource_path.get_base_dir().get_base_dir()
+
+
+## The MCP server file to use: the user's override (Editor Settings > Godot Mcp), else the one inside the addon.
+## Pure on purpose (unit-tested): `bundled` is a res:// or absolute path.
+static func choose_server(custom: String, bundled: String) -> Dictionary:
+	custom = custom.strip_edges()
+	if not custom.is_empty() and FileAccess.file_exists(custom):
+		return {"path": custom.replace("\\", "/"), "source": "setting"}
+	if FileAccess.file_exists(bundled):
+		return {"path": ProjectSettings.globalize_path(bundled), "source": "bundled"}
+	return {"path": "", "source": ""}
+
+
+func refresh_server_info() -> Dictionary:
 	var settings := EditorInterface.get_editor_settings()
-	if not settings.has_setting(SETTING_SERVER_PATH):
-		return ""
-	var server := str(settings.get_setting(SETTING_SERVER_PATH)).strip_edges()
-	if server.is_empty() or not FileAccess.file_exists(server):
-		return ""
+	var custom := str(settings.get_setting(SETTING_SERVER_PATH)) if settings.has_setting(SETTING_SERVER_PATH) else ""
+	server_info = choose_server(custom, addon_dir().path_join(BUNDLED_SERVER))
+	return server_info
+
+
+## Absolute path of the Node.js executable (it runs the MCP server), or "" when none is found.
+## Looks through PATH, then the usual install folders (a Godot started from a desktop icon can have a short
+## PATH). No process is started, so a missing Node never puts an error in the editor log.
+static func find_node() -> String:
+	var windows := OS.get_name() == "Windows"
+	var exe := "node.exe" if windows else "node"
+	var dirs: Array = []
+	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+		dirs.append(dir.strip_edges().trim_prefix('"').trim_suffix('"'))
+	if windows:
+		dirs.append_array([OS.get_environment("ProgramFiles") + "/nodejs", OS.get_environment("LOCALAPPDATA") + "/Programs/nodejs"])
+	else:
+		dirs.append_array(["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"])
+	for dir in dirs:
+		if dir.is_empty():
+			continue
+		var candidate: String = dir.replace("\\", "/").path_join(exe)
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return ""
+
+
+## Command to run in a terminal opened in the project folder to give Claude Code the same Godot MCP server.
+static func terminal_command(server: String, port: int) -> String:
+	var env := " -e GODOT_MCP_PORT=%d" % port if port != DEFAULT_WS_PORT else ""
+	return 'claude mcp add godot%s -- node "%s"' % [env, server]
+
+
+## Block to paste in claude_desktop_config.json.
+static func desktop_config(server: String, port: int) -> String:
+	var entry := {"command": "node", "args": [server]}
+	if port != DEFAULT_WS_PORT:
+		entry["env"] = {"GODOT_MCP_PORT": str(port)}
+	return JSON.stringify({"mcpServers": {"godot": entry}}, "  ")
+
+
+## --mcp-config handing the godot MCP server to claude (nothing when it cannot work: claude then runs
+## with whatever MCP servers the user declared with `claude mcp add`).
+func _write_mcp_config() -> String:
+	refresh_server_info()
+	if str(server_info["source"]).is_empty():
+		return ""  # the chat banner explains it once claude has started
 	if godot_port <= 0:
 		notice.emit("Le serveur WebSocket du plugin n'écoute pas (voir la sortie de l'éditeur) : Claude ne pourra pas piloter cet éditeur.", true)
+		return ""
+	var node := find_node()
+	node_ok = not node.is_empty()
+	if not node_ok:
 		return ""
 	var env := {"GODOT_MCP_PORT": str(godot_port)}
 	var token := OS.get_environment("GODOT_MCP_TOKEN")
@@ -253,7 +323,7 @@ func _write_mcp_config() -> String:
 	if not token.is_empty():
 		env["GODOT_MCP_TOKEN"] = token
 	env["GODOT_PROJECT_PATH"] = project_dir()
-	var config := {"mcpServers": {"godot": {"command": "node", "args": [server], "env": env}}}
+	var config := {"mcpServers": {"godot": {"command": node, "args": [server_info["path"]], "env": env}}}
 	var file := FileAccess.open(MCP_CONFIG_FILE, FileAccess.WRITE)
 	if file == null:
 		return ""

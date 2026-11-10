@@ -20,6 +20,8 @@ func _initialize() -> void:
 	_test_markdown()
 	_test_links()
 	_test_session_helpers()
+	_test_server_selection()
+	_test_connect_helpers()
 	print("
 " + ("%d FAILURE(S)" % failures if failures else "ALL PASSED"))
 	quit(1 if failures else 0)
@@ -65,3 +67,39 @@ func _test_session_helpers() -> void:
 	var rx := RegEx.create_from_string("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 	check(rx.search(uuid) != null, "session: generated ids are valid v4 UUIDs")
 	check(ClaudeSession._flatten([{"type": "text", "text": "a"}, {"type": "image"}]) == "a\n[image]", "session: tool results are flattened to text")
+
+
+## Quel fichier serveur MCP le chat donne à claude : l'override des réglages, sinon celui de l'addon.
+func _test_server_selection() -> void:
+	var dir := "user://unit_server"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var custom := dir.path_join("custom.mjs")
+	var bundled := dir.path_join("bundled.mjs")
+	for path in [custom, bundled]:
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		f.store_string("// test")
+		f.close()
+	var custom_abs := ProjectSettings.globalize_path(custom)
+	var bundled_abs := ProjectSettings.globalize_path(bundled)
+
+	var both := ClaudeSession.choose_server(custom_abs, bundled)
+	check(both["source"] == "setting" and both["path"] == custom_abs, "serveur: l'override des réglages passe avant le serveur de l'addon")
+	var only_bundled := ClaudeSession.choose_server("", bundled)
+	check(only_bundled["source"] == "bundled" and only_bundled["path"] == bundled_abs, "serveur: sans override, on prend le serveur livré dans l'addon (chemin absolu)")
+	var stale := ClaudeSession.choose_server("C:/n/existe/pas.mjs", bundled)
+	check(stale["source"] == "bundled", "serveur: un override qui pointe vers un fichier disparu est ignoré")
+	check(ClaudeSession.choose_server("  ", dir.path_join("absent.mjs"))["source"] == "", "serveur: aucun fichier trouvé = source vide")
+	for path in [custom, bundled]:
+		DirAccess.remove_absolute(path)
+
+
+func _test_connect_helpers() -> void:
+	var server := "C:/Mon dossier/addons/godot_mcp/server/godot-mcp-server.mjs"
+	check(ClaudeSession.terminal_command(server, 6505) == 'claude mcp add godot -- node "%s"' % server, "connexion terminal: commande avec guillemets (chemin avec espaces), port par défaut sans -e")
+	check(ClaudeSession.terminal_command(server, 6507) == 'claude mcp add godot -e GODOT_MCP_PORT=6507 -- node "%s"' % server, "connexion terminal: un autre port est transmis avec -e")
+	var desktop = JSON.parse_string(ClaudeSession.desktop_config(server, 6505))
+	check(desktop is Dictionary and desktop["mcpServers"]["godot"]["command"] == "node" and desktop["mcpServers"]["godot"]["args"] == [server] and not desktop["mcpServers"]["godot"].has("env"), "connexion Claude Desktop: JSON valide, sans env au port par défaut")
+	var custom_port = JSON.parse_string(ClaudeSession.desktop_config(server, 6508))
+	check(custom_port["mcpServers"]["godot"]["env"]["GODOT_MCP_PORT"] == "6508", "connexion Claude Desktop: un autre port est transmis dans env")
+	var node := ClaudeSession.find_node()
+	check(node.is_empty() or FileAccess.file_exists(node), "find_node(): renvoie un fichier existant, ou rien, sans lancer de processus")

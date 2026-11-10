@@ -5,7 +5,7 @@ Serveur [MCP](https://modelcontextprotocol.io) permettant à Claude (ou à n'imp
 Le plugin ajoute aussi un **chat Claude** intégré à l'éditeur (voir [Chat Claude](#chat-claude)). Il s'associe, sans en dépendre, à l'addon [**MCF Todo**](../MCF-Todo/) : si les deux sont actifs, Claude lit et coche ta todo, et chaque tâche gagne l'entrée « Demander à Claude ». Les deux addons s'installent séparément ou ensemble (voir le [bundle](../Bundle-Todo-MCP/)).
 
 ```
-Client MCP ──stdio──▶ server/ (Node/TypeScript)
+Client MCP ──stdio──▶ serveur MCP (Node ; livré en un seul fichier dans addons/godot_mcp/server/)
                          ├── WebSocket ws://127.0.0.1:6505 ──▶ addons/godot_mcp (plugin éditeur)
                          └── child_process ──▶ godot --headless … (CLI, sans éditeur)
 ```
@@ -17,37 +17,32 @@ Testé avec Godot 4.7.2. Visé : 4.2+. `get_editor_log` nécessite la 4.5+. Le d
 
 ## Installation
 
-### 1. Serveur
+**Prérequis** : [Node.js](https://nodejs.org) 18+ (il fait tourner le serveur MCP ; l'addon le cherche dans le `PATH` puis dans ses dossiers d'installation habituels) et, pour le chat, Claude Code installé et connecté.
+
+1. Copie `addons/godot_mcp/` dans le dossier `addons/` de ton projet. Le serveur MCP est **déjà dedans** (`addons/godot_mcp/server/`, un seul fichier : pas de `npm install`).
+2. Active **Godot MCP** dans *Projet > Paramètres du projet > Plugins*. La sortie de l'éditeur doit afficher :
+   ```
+   [Godot MCP] listening on 127.0.0.1:6505
+   ```
+3. C'est tout : le dock **Claude** utilise le serveur livré dans l'addon, sans rien choisir ni configurer.
+
+### Connecter un autre Claude (terminal, Claude Desktop)
+
+Le chat est déjà branché. Pour qu'un Claude lancé **à côté** (dans un terminal, ou Claude Desktop) pilote aussi l'éditeur, ouvre le menu `⋯` du dock Claude :
+- **Connecter Claude Code (terminal) à cet éditeur** copie la commande `claude mcp add godot -- node "…/godot-mcp-server.mjs"` ; colle-la dans un terminal ouvert dans le dossier du projet ;
+- **Connecter Claude Desktop à cet éditeur** copie le bloc JSON à ajouter dans `claude_desktop_config.json`.
+
+Le chemin du serveur est déjà rempli (et le port de l'éditeur si ce n'est pas 6505) : il n'y a rien à chercher.
+
+### Depuis les sources
+
+Le fichier serveur est généré, pas versionné : après un clone, construis-le une fois.
 ```bash
 cd server
-npm install
-npm run build
+npm ci
+npm run build   # compile (tsc) puis écrit addons/godot_mcp/server/godot-mcp-server.mjs + THIRD-PARTY-LICENSES.txt
 ```
-
-### 2. Plugin Godot
-Copie `addons/godot_mcp/` dans le dossier `addons/` de ton projet, puis active **Godot MCP** dans *Projet > Paramètres du projet > Plugins*. La sortie de l'éditeur doit afficher :
-```
-[Godot MCP] listening on 127.0.0.1:6505
-```
-
-### 3. Déclarer le serveur dans Claude Code
-```bash
-claude mcp add godot -e GODOT_PATH="C:/chemin/Godot_v4.x-stable_win64.exe" -- node /chemin/vers/Godot-MCP/server/dist/index.js
-```
-`/chemin/vers/Godot-MCP` est le dossier de cet addon sur ta machine (celui qui contient ce README).
-
-Pour Claude Desktop (`claude_desktop_config.json`) :
-```json
-{
-  "mcpServers": {
-    "godot": {
-      "command": "node",
-      "args": ["/chemin/vers/Godot-MCP/server/dist/index.js"],
-      "env": { "GODOT_PATH": "C:/chemin/Godot_v4.x-stable_win64.exe" }
-    }
-  }
-}
-```
+Sans ce fichier, le chat l'indique par un bandeau (il propose alors de désigner un fichier serveur à la main). Variante pour un client MCP sans passer par l'addon : `node server/dist/index.js` (sortie de `tsc`) fonctionne aussi.
 
 ## Dock dans l'éditeur
 
@@ -57,8 +52,8 @@ Le dock **Claude** apparaît à l'activation du plugin. C'est un vrai dock Godot
 Le dock lance **Claude Code** (`claude -p`, mode `stream-json`) comme processus fils et lui parle comme dans un terminal : mêmes comptes, mêmes MCP, y compris `godot`. Il ne démarre qu'au premier message envoyé et s'arrête avec l'éditeur.
 
 - **Prérequis** : Claude Code installé et connecté (`claude` dans le PATH, ou `~/.local/bin/claude`) ; Godot 4.5+.
-- **Serveur MCP Godot** : renseigne une fois `server/dist/index.js` (bouton *Choisir…* du bandeau, ou *Éditeur > Paramètres de l'éditeur > Godot Mcp > Server Path*). Valable pour tous les projets. Sans cela, le chat utilise les MCP que tu as déclarés avec `claude mcp add`.
-- **Reprendre dans un terminal** : le menu `⋯` copie `claude --resume <id>` ; lance-le depuis le dossier du projet pour continuer la même conversation. Après un redémarrage de l'éditeur, le message suivant reprend automatiquement la conversation en cours (l'affichage de l'historique n'est pas restauré).
+- **Serveur MCP Godot** : celui de l'addon est utilisé automatiquement, rien à choisir. Si Node.js est introuvable ou si le fichier serveur manque (installation depuis les sources sans `npm run build`), un bandeau le dit et explique quoi faire.
+- **Reprendre dans un terminal** : le menu `⋯` > *Reprendre cette conversation dans un terminal* copie `claude --resume <id>` ; lance-le depuis le dossier du projet pour continuer la même conversation. Après un redémarrage de l'éditeur, le message suivant reprend automatiquement la conversation en cours (l'affichage de l'historique n'est pas restauré).
 - **Stop** interrompt Claude sans perdre la conversation ; **Nouveau** démarre une nouvelle conversation (l'ancienne reste reprenable).
 - Les réponses sont rendues en Markdown (blocs de code, listes, tableaux, liens). Les appels d'outils apparaissent comme des cartes repliables.
 
@@ -67,7 +62,7 @@ Le dock lance **Claude Code** (`claude -p`, mode `stream-json`) comme processus 
 | Paramètre de l'éditeur (`godot_mcp/…`) | Rôle |
 |---|---|
 | `claude_path` | Chemin de l'exécutable `claude` (sinon détecté automatiquement) |
-| `server_path` | Chemin de `server/dist/index.js`, déclaré à Claude comme serveur MCP `godot` |
+| `server_path` | Avancé : chemin d'un autre fichier serveur MCP, qui remplace celui de l'addon (utile pour tester une version en développement) |
 | `claude_extra_args` | Arguments supplémentaires passés à `claude` (ex. `--model opus`) |
 
 ### Avec l'addon MCF Todo (facultatif)
@@ -134,9 +129,10 @@ Le plugin n'écoute que sur `127.0.0.1`.
 New-Item -ItemType Junction -Path test_project\addons\godot_mcp -Target addons\godot_mcp
 ```
 
-Pour lancer le test de bout en bout :
+Pour lancer le test de bout en bout (il teste le serveur **tel qu'il est livré**, le fichier embarqué dans l'addon) :
 
 ```bash
+cd server && npm ci && npm run build     # une fois, et après chaque changement du serveur
 # Terminal 1 : éditeur headless avec le plugin
 godot --headless --editor --path test_project
 # Terminal 2
@@ -155,12 +151,15 @@ Pour tester les tools à la main : `npm run inspector` (MCP Inspector).
 
 ### Structure
 ```
-server/src/
-  index.ts        point d'entrée (stdio)
-  bridge.ts       client WebSocket vers le plugin
-  cli.ts          wrapper de l'exécutable Godot
-  tools/          définition des tools (zod)
+server/                 sources du serveur MCP (TypeScript) — pas livré tel quel
+  src/index.ts          point d'entrée (stdio)
+  src/bridge.ts         client WebSocket vers le plugin
+  src/cli.ts            wrapper de l'exécutable Godot
+  src/tools/            définition des tools (zod)
+  scripts/bundle.mjs    embarque le serveur et ses dépendances en UN fichier dans l'addon (esbuild) + licences
 addons/godot_mcp/
+  server/               serveur livré avec l'addon : godot-mcp-server.mjs et THIRD-PARTY-LICENSES.txt (générés,
+                        non versionnés) ; .gdignore le cache à Godot
   plugin.gd       EditorPlugin (serveur WebSocket + dock Claude + lien facultatif avec MCF Todo)
   ws_server.gd    serveur WebSocket et dispatch JSON
   mcp_logger.gd   capture du log éditeur (4.5+)

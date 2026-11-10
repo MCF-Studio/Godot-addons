@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Assemble les livrables à partir des dossiers des addons (aucun code n'est dupliqué dans ce dossier) :
 //   dist/mcf-todo/   MCF Todo seul
-//   dist/godot-mcp/  Godot MCP seul (addon + serveur MCP compilé)
+//   dist/godot-mcp/  Godot MCP seul (l'addon contient déjà son serveur MCP embarqué)
 //   dist/bundle/     les deux ensemble, tels que le chat et la todo se voient
 // Avant d'assembler, vérifie la cohérence entre addons (voir les contrôles ci-dessous) et s'arrête au moindre écart.
-// Usage : node build.mjs        (le serveur doit être compilé : cd ../Godot-MCP/server && npm ci && npm run build)
+// Usage : node build.mjs        (d'abord : cd ../Godot-MCP/server && npm ci && npm run build, qui embarque le serveur dans l'addon)
 // Les .zip se fabriquent à partir de dist/ (étape de mise en ligne).
 import fs from "node:fs";
 import path from "node:path";
@@ -65,9 +65,19 @@ for (const a of [todo, mcp]) {
 const cfgName = (a) => /^name="(.*)"$/m.exec(fs.readFileSync(path.join(addonDir(a), "plugin.cfg"), "utf8"))?.[1];
 if (cfgName(todo) === cfgName(mcp)) problems.push("les deux plugin.cfg portent le même nom");
 
-// 5. Le serveur MCP doit être compilé.
-const serverDist = path.join(mcp.dir, "server", "dist", "index.js");
-if (!fs.existsSync(serverDist)) problems.push("serveur MCP non compilé : cd ../Godot-MCP/server && npm ci && npm run build");
+// 5. Le serveur MCP embarqué dans l'addon Godot MCP doit exister, être caché à Godot et ne pas être périmé.
+const bundledDir = path.join(addonDir(mcp), "server");
+const bundledServer = path.join(bundledDir, "godot-mcp-server.mjs");
+if (!fs.existsSync(bundledServer)) {
+  problems.push("serveur MCP non embarqué dans l'addon : cd ../Godot-MCP/server && npm ci && npm run build");
+} else {
+  if (!fs.existsSync(path.join(bundledDir, "THIRD-PARTY-LICENSES.txt"))) problems.push("THIRD-PARTY-LICENSES.txt absent (relancer npm run build)");
+  const builtAt = fs.statSync(bundledServer).mtimeMs;
+  const sources = [...walk(path.join(mcp.dir, "server", "src")), path.join(mcp.dir, "server", "package.json"), path.join(mcp.dir, "server", "scripts", "bundle.mjs")];
+  const newer = sources.filter((f) => fs.statSync(f).mtimeMs > builtAt + 2000);
+  if (newer.length) problems.push(`serveur MCP embarqué périmé (sources plus récentes : ${path.relative(mcp.dir, newer[0])}${newer.length > 1 ? " et " + (newer.length - 1) + " autre(s)" : ""}) : relancer npm run build`);
+}
+if (!fs.existsSync(path.join(bundledDir, ".gdignore"))) problems.push("server/.gdignore manquant dans l'addon Godot MCP (Godot scannerait le dossier du serveur)");
 
 if (problems.length) {
   console.error("Assemblage annulé :\n" + problems.map((p) => "  - " + p).join("\n"));
@@ -77,11 +87,6 @@ if (problems.length) {
 // --- Assemblage ---------------------------------------------------------------
 fs.rmSync(dist, { recursive: true, force: true });
 const copy = (from, to) => fs.cpSync(from, to, { recursive: true });
-const serverFiles = (dest) => {
-  copy(path.join(mcp.dir, "server", "dist"), path.join(dest, "server", "dist"));
-  for (const f of ["package.json", "package-lock.json"]) copy(path.join(mcp.dir, "server", f), path.join(dest, "server", f));
-};
-
 const out = {
   "mcf-todo": (d) => {
     copy(addonDir(todo), path.join(d, "addons", todo.addon));
@@ -89,13 +94,11 @@ const out = {
   },
   "godot-mcp": (d) => {
     copy(addonDir(mcp), path.join(d, "addons", mcp.addon));
-    serverFiles(d);
     copy(path.join(mcp.dir, "README.md"), path.join(d, "README.md"));
   },
   bundle: (d) => {
     copy(addonDir(todo), path.join(d, "addons", todo.addon));
     copy(addonDir(mcp), path.join(d, "addons", mcp.addon));
-    serverFiles(d);
     copy(path.join(here, "README.md"), path.join(d, "README.md"));
     copy(path.join(todo.dir, "README.md"), path.join(d, "docs", "MCF-Todo.md"));
     copy(path.join(mcp.dir, "README.md"), path.join(d, "docs", "Godot-MCP.md"));
@@ -107,4 +110,4 @@ for (const [name, build] of Object.entries(out)) {
   build(d);
   console.log(`dist/${name}/  ${walk(d).length} fichiers`);
 }
-console.log("OK : fichiers partagés identiques, UID uniques, serveur compilé.");
+console.log("OK : fichiers partagés identiques, UID uniques, serveur MCP embarqué et à jour.");

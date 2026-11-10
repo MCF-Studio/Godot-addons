@@ -7,25 +7,26 @@ Ce dossier ne contient **aucun code d'addon** : le bundle est assemblé à parti
 | Livrable | Contenu | Doc |
 |---|---|---|
 | MCF Todo seul | `addons/mcf_todo/` | [`MCF-Todo/README.md`](../MCF-Todo/README.md) |
-| Godot MCP seul | `addons/godot_mcp/` + `server/` (serveur MCP compilé) | [`Godot-MCP/README.md`](../Godot-MCP/README.md) |
-| **Bundle** | les deux addons + `server/` + la doc des deux | ce fichier |
+| Godot MCP seul | `addons/godot_mcp/` (le serveur MCP est déjà dedans) | [`Godot-MCP/README.md`](../Godot-MCP/README.md) |
+| **Bundle** | les deux addons + la doc des deux | ce fichier |
 
 Chacun fonctionne sans les autres. Le lien entre les deux est facultatif et automatique : s'ils sont actifs dans le même projet, ils se trouvent (métadonnées d'`Engine`, aucun import de code).
 
 ## Installer le bundle
 
+**Prérequis** : [Node.js](https://nodejs.org) 18+ (il fait tourner le serveur MCP) ; pour le chat, Claude Code installé et connecté ; Godot 4.5+.
+
 1. Copier `addons/mcf_todo/` et `addons/godot_mcp/` dans le dossier `addons/` du projet.
-2. Installer le serveur MCP : `cd server && npm ci --omit=dev` (Node 18+ ; le dossier `server/` peut rester où tu veux).
-3. *Projet > Paramètres du projet > Plugins* : activer **MCF Todo** et **Godot MCP**.
-4. Dans le dock **Claude**, cliquer sur *Choisir…* et désigner `server/dist/index.js` (une seule fois pour tous les projets), ou déclarer le serveur avec `claude mcp add` (voir la doc de Godot MCP).
-5. Prérequis du chat : Claude Code installé et connecté, Godot 4.5+.
+2. *Projet > Paramètres du projet > Plugins* : activer **MCF Todo** et **Godot MCP**.
+
+C'est tout. Le serveur MCP est dans `addons/godot_mcp/server/` et le dock **Claude** l'utilise tout seul : aucun fichier à chercher ni à choisir, aucun `npm install`. Pour qu'un Claude lancé dans un terminal ou Claude Desktop pilote aussi l'éditeur, le menu `⋯` du dock Claude copie la commande ou la config toute prête (voir la doc de Godot MCP).
 
 > ⚠️ Le chat lance Claude **sans demande d'autorisation** (voir l'avertissement de la doc de Godot MCP). N'active **Godot MCP** que si c'est ce que tu veux ; **MCF Todo** n'exécute rien et peut s'utiliser seul.
 
 ## Fabriquer les livrables
 
 ```bash
-cd ../Godot-MCP/server && npm ci && npm run build   # une fois : compile le serveur MCP
+cd ../Godot-MCP/server && npm ci && npm run build   # une fois, et à chaque changement du serveur : l'embarque dans l'addon
 cd ../../Bundle-Todo-MCP && node build.mjs
 ```
 
@@ -37,7 +38,7 @@ cd ../../Bundle-Todo-MCP && node build.mjs
 | aucun UID Godot en double entre les deux addons | deux addons dans un même projet se marcheraient dessus |
 | un `.uid` pour chaque `.gd`, et aucun `.uid` orphelin | Godot 4.4+ les attend dans le dépôt |
 | noms de `plugin.cfg` distincts | deux entrées distinctes dans la liste des plugins |
-| serveur MCP compilé | le livrable Godot MCP en a besoin |
+| serveur MCP embarqué dans l'addon Godot MCP, avec ses licences, caché à Godot (`.gdignore`) et plus récent que ses sources | c'est ce fichier unique que l'addon donne à Claude ; un fichier périmé livrerait un ancien serveur |
 
 ## Tester l'intégration
 

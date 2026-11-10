@@ -26,7 +26,8 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
-	if Engine.get_meta(META_STORE, null) == _store:
+	# has_meta first: get_meta(key, null) prints an engine error when the key is absent.
+	if Engine.has_meta(META_STORE) and Engine.get_meta(META_STORE) == _store:
 		Engine.remove_meta(META_STORE)
 	if _dock:
 		_dock.free_dock()

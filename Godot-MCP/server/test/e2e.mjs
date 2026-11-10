@@ -13,9 +13,15 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const projectPath = process.env.E2E_PROJECT ? path.resolve(process.env.E2E_PROJECT) : path.resolve(here, "../../test_project");
 const expectTodo = process.env.E2E_EXPECT_TODO === "1";
 
+// On teste le serveur tel qu'il est livré : le fichier unique embarqué dans l'addon (npm run build).
+const serverFile = path.resolve(here, "../../addons/godot_mcp/server/godot-mcp-server.mjs");
+if (!fs.existsSync(serverFile)) {
+  console.error("Serveur embarqué introuvable : lance d'abord `npm run build` dans Godot-MCP/server.");
+  process.exit(2);
+}
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: [path.resolve(here, "../dist/index.js")],
+  args: [serverFile],
   env: { ...process.env, GODOT_PROJECT_PATH: projectPath },
   stderr: "inherit",
 });
@@ -96,6 +102,9 @@ if (expectTodo) {
     const text = await call(name, args, { expectError: true });
     check(String(text).includes("MCF Todo addon is not installed"), `${name} explains that the MCF Todo addon is missing`);
   }
+  // Un outil qui échoue "proprement" ne doit rien écrire d'inquiétant dans le journal de l'éditeur.
+  const journal = await call("get_editor_log", { max_lines: 100, errors_only: true });
+  check(!JSON.stringify(journal).includes("meta' values"), "todo_* sans l'addon n'ajoute aucune erreur moteur au journal de l'éditeur");
 }
 
 // Error paths

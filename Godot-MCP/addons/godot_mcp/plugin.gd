@@ -65,7 +65,9 @@ func _register_todo_action() -> void:
 
 
 func _unregister_todo_action() -> void:
-	var actions = Engine.get_meta(TODO_ACTIONS_META, null)
+	if not Engine.has_meta(TODO_ACTIONS_META):  # get_meta(key, null) would print an engine error
+		return
+	var actions = Engine.get_meta(TODO_ACTIONS_META)
 	if not (actions is Array):
 		return
 	for i in range(actions.size() - 1, -1, -1):
@@ -88,7 +90,7 @@ func _register_editor_settings() -> void:
 	var settings := EditorInterface.get_editor_settings()
 	var definitions := [
 		[ClaudeSession.SETTING_CLAUDE_PATH, PROPERTY_HINT_GLOBAL_FILE, "*.exe,*"],
-		[ClaudeSession.SETTING_SERVER_PATH, PROPERTY_HINT_GLOBAL_FILE, "*.js"],
+		[ClaudeSession.SETTING_SERVER_PATH, PROPERTY_HINT_GLOBAL_FILE, "*.mjs,*.js"],
 		[ClaudeSession.SETTING_EXTRA_ARGS, PROPERTY_HINT_NONE, ""],
 	]
 	for definition in definitions:

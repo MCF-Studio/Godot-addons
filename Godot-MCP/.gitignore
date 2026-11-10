@@ -5,3 +5,6 @@ test_project/generated/
 # Junction to ../../addons/godot_mcp (see README)
 test_project/addons/
 *.zip
+# Serveur MCP embarqué dans l'addon : généré par `npm run build` (server/scripts/bundle.mjs)
+addons/godot_mcp/server/godot-mcp-server.mjs
+addons/godot_mcp/server/THIRD-PARTY-LICENSES.txt
