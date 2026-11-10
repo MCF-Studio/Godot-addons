@@ -1,6 +1,6 @@
 @tool
 extends RefCounted
-## Todo list model and persistence (res://.godot_mcp/todo.json).
+## Todo list model and persistence (res://.mcf_todo/todo.json).
 ##
 ## Changes come from the dock UI, from MCP commands, or from someone editing the file by hand.
 ## `changed(source)` says which one ("ui", "mcp" or "external") so the UI can avoid
@@ -10,8 +10,8 @@ signal changed(source: String)
 ## Something the user should know about (corrupt file, write failure...).
 signal warning(message: String)
 
-const DIR := "res://.godot_mcp"
-const PATH := "res://.godot_mcp/todo.json"
+const DIR := "res://.mcf_todo"
+const PATH := "res://.mcf_todo/todo.json"
 const VERSION := 1
 const STATUSES := ["open", "doing", "done"]
 const MAX_TEXT := 20000

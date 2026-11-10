@@ -33,7 +33,7 @@ const INTERRUPT_GRACE_MSEC := 6000
 
 const SYSTEM_PROMPT := "You are running inside the chat dock of the Godot editor (project: %s). " \
 	+ "The godot MCP tools drive this very editor (scenes, nodes, scripts, run). " \
-	+ "The editor's Todo dock is shared with the user through todo_list / todo_add / todo_update / todo_remove. " \
+	+ "If todo_list / todo_add / todo_update / todo_remove are available, they edit the user's Todo dock in this editor. " \
 	+ "The user reads your replies in a narrow dock: be concise and avoid wide tables."
 
 ## Id of the conversation (empty until the first message).

@@ -20,7 +20,7 @@ const server = new McpServer(
       "Controls Godot 4. Editor tools (scenes, nodes, scripts, run) need the Godot editor open with the 'Godot MCP' plugin enabled; " +
       "start with get_editor_state. CLI tools (godot_version, run_and_capture, check_script, export_project) work without the editor. " +
       "Node paths are relative to the edited scene root ('.' = root). Use run_and_capture to read game output and errors. " +
-      "The editor's Todo dock is shared with the user: todo_list / todo_add / todo_update / todo_remove (set a task to `doing` when you start it and `done` when finished).",
+      "When the MCF Todo addon is enabled, its Todo dock is shared with the user: todo_list / todo_add / todo_update / todo_remove (set a task to `doing` when you start it and `done` when finished).",
   },
 );
 

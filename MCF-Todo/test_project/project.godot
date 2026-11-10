@@ -1,0 +1,11 @@
+; Projet de test de l'addon MCF Todo (addons/mcf_todo est une jonction vers ../../addons/mcf_todo, voir README).
+config_version=5
+
+[application]
+
+config/name="MCF Todo Test"
+config/features=PackedStringArray("4.7")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/mcf_todo/plugin.cfg")

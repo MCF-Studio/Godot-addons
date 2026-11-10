@@ -13,14 +13,12 @@ const COMMAND_SCRIPTS := [
 	preload("commands/scene_commands.gd"),
 	preload("commands/node_commands.gd"),
 	preload("commands/script_commands.gd"),
-	preload("commands/todo_commands.gd"),
+	preload("commands/todo_commands.gd"),  # outils todo_* : utiles seulement si l'addon MCF Todo est actif
 ]
 
 var plugin: EditorPlugin
 ## Ring buffer of editor log lines (Godot 4.5+), or null.
 var logger: Object
-## Todo list shown in the dock (set by the plugin), or null.
-var todo_store: RefCounted
 ## Port the server actually listens on (0 when it could not start).
 var listening_port := 0
 

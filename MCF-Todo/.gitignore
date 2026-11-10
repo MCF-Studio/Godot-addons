@@ -1,0 +1,6 @@
+test_project/.godot/
+# Données de la liste créées par le projet de test
+test_project/.mcf_todo/
+# Jonction vers ../addons/mcf_todo (voir README)
+test_project/addons/
+*.zip

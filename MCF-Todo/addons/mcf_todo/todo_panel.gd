@@ -2,17 +2,20 @@
 extends VBoxContainer
 ## Content of the "Todo" dock: filter bar, scrolling list of rows, undo bar, input.
 
-const AutoTextEdit = preload("../ui/auto_text_edit.gd")
+const AutoTextEdit = preload("ui/auto_text_edit.gd")
 const TodoRow = preload("todo_row.gd")
 
-## The user wants Claude to work on a task.
-signal ask_claude(item: Dictionary)
+## Other addons can add entries to the task context menu: append {"label": String, "callable": Callable}
+## to the Array stored in Engine metadata under this name; the Callable receives the task (Dictionary:
+## id, text, status, created, updated). Read when the menu opens, so enabling order does not matter.
+const META_ACTIONS := "mcf_todo_actions"
 
 const MENU_EDIT := 0
 const MENU_DOING := 1
 const MENU_DONE := 2
-const MENU_ASK := 3
 const MENU_DELETE := 4
+## Ids of entries added by other addons start here.
+const MENU_ACTION_BASE := 100
 const UNDO_BAR_SECONDS := 6.0
 
 var store: RefCounted
@@ -32,6 +35,7 @@ var _undo_timer: Timer
 var _input: AutoTextEdit
 var _menu: PopupMenu
 var _menu_id := ""
+var _menu_actions: Array = []
 var _rebuild_pending := false
 
 
@@ -325,12 +329,24 @@ func _on_context(id: String, screen_position: Vector2) -> void:
 	else:
 		_menu.add_item("Marquer « en cours »", MENU_DOING)
 	_menu.add_item("Rouvrir" if item["status"] == "done" else "Marquer comme faite", MENU_DONE)
-	_menu.add_separator()
-	_menu.add_item("Demander à Claude", MENU_ASK)
+	_menu_actions = _external_actions()
+	if not _menu_actions.is_empty():
+		_menu.add_separator()
+		for i in _menu_actions.size():
+			_menu.add_item(str(_menu_actions[i]["label"]), MENU_ACTION_BASE + i)
 	_menu.add_separator()
 	_menu.add_item("Supprimer", MENU_DELETE)
 	_menu.reset_size()
 	_menu.popup(Rect2i(Vector2i(screen_position), Vector2i.ZERO))
+
+
+## Valid entries registered by other addons (see META_ACTIONS).
+func _external_actions() -> Array:
+	var out := []
+	for action in Engine.get_meta(META_ACTIONS, []):
+		if action is Dictionary and action.get("callable") is Callable and not str(action.get("label", "")).is_empty():
+			out.append(action)
+	return out
 
 
 func _on_menu(menu_id: int) -> void:
@@ -346,10 +362,14 @@ func _on_menu(menu_id: int) -> void:
 			store.update(_menu_id, {"status": "open" if item["status"] == "doing" else "doing"})
 		MENU_DONE:
 			store.update(_menu_id, {"status": "open" if item["status"] == "done" else "done"})
-		MENU_ASK:
-			ask_claude.emit(item)
 		MENU_DELETE:
 			_on_delete(_menu_id)
+		_:
+			var index := menu_id - MENU_ACTION_BASE
+			if index >= 0 and index < _menu_actions.size():
+				var action: Callable = _menu_actions[index]["callable"]
+				if action.is_valid():
+					action.call(item)
 
 
 # --- Drag and drop reordering ------------------------------------------------

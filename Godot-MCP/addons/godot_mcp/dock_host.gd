@@ -1,5 +1,7 @@
 @tool
 extends RefCounted
+## Fichier partagé : copie IDENTIQUE dans MCF-Todo/addons/mcf_todo/ et Godot-MCP/addons/godot_mcp/
+## (chaque addon reste autonome). Toute modification se fait dans les deux ; Bundle-Todo-MCP/build.mjs vérifie.
 ## Adds a Control to the editor as a movable dock.
 ## Godot 4.6+ : EditorDock + EditorPlugin.add_dock() (the user can drag it to any slot, float it, close it,
 ## and the editor remembers where it went). Older versions: add_control_to_dock / add_control_to_bottom_panel.

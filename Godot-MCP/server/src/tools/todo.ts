@@ -3,12 +3,15 @@ import { bridgeTool, type Ctx } from "./common.js";
 
 const status = z.enum(["open", "doing", "done"]);
 
-/** Todo list of the Godot editor's "Todo" dock (stored in res://.godot_mcp/todo.json). */
+/**
+ * Todo list of the "MCF Todo" addon (Todo dock, stored in res://.mcf_todo/todo.json).
+ * The addon is optional: without it every call returns an explicit "not installed or not enabled" error.
+ */
 export function registerTodoTools(ctx: Ctx): void {
   bridgeTool(
     ctx,
     "todo_list",
-    "Lists the tasks of the project's todo list shown in the Godot editor (Todo dock). " +
+    "Lists the tasks of the project's todo list shown in the Godot editor (Todo dock of the MCF Todo addon, which must be enabled). " +
       "Each task has an id, text and status: open, doing (in progress) or done.",
     {
       status: z

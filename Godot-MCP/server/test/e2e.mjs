@@ -1,5 +1,8 @@
 // End-to-end smoke test: spawns the MCP server over stdio and drives a running Godot editor.
 // Usage: node test/e2e.mjs   (editor must be open on test_project with the plugin enabled)
+// Env:   E2E_PROJECT       project the editor has open (default: ../../test_project)
+//        E2E_EXPECT_TODO=1 the MCF Todo addon is enabled there: test the todo_* tools for real.
+//                          Unset: the addon is absent and the tools must say so clearly.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import fs from "node:fs";
@@ -7,7 +10,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const projectPath = path.resolve(here, "../../test_project");
+const projectPath = process.env.E2E_PROJECT ? path.resolve(process.env.E2E_PROJECT) : path.resolve(here, "../../test_project");
+const expectTodo = process.env.E2E_EXPECT_TODO === "1";
 
 const transport = new StdioClientTransport({
   command: process.execPath,
@@ -71,8 +75,8 @@ await call("get_class_info", { class_name: "Sprite2D" });
 await call("list_files", { extensions: ["tscn", "gd"] });
 await call("get_editor_log", { max_lines: 5 });
 
-// Todo list (shared with the editor's Todo dock)
-{
+// Todo list (optional MCF Todo addon)
+if (expectTodo) {
   const added = await call("todo_add", { items: ["e2e task A", "e2e task B"], position: "top", status: "open" });
   const [a, b] = added.added ?? [];
   check(a?.index === 0 && b?.index === 1 && a?.text === "e2e task A", "todo_add keeps the given order at the top");
@@ -81,12 +85,17 @@ await call("get_editor_log", { max_lines: 5 });
   const list = await call("todo_list", { status: "active" });
   const ours = (list.items ?? []).filter((t) => t.text.startsWith("e2e task"));
   check(ours.length === 2 && ours[0].id === b.id && ours[1].text === "e2e task A (edited)", "todo_update changes status, text and position");
-  const onDisk = JSON.parse(fs.readFileSync(path.join(projectPath, ".godot_mcp", "todo.json"), "utf8"));
-  check(onDisk.items.some((t) => t.id === a.id && t.text === "e2e task A (edited)"), "todo list is saved to res://.godot_mcp/todo.json right away");
+  const onDisk = JSON.parse(fs.readFileSync(path.join(projectPath, ".mcf_todo", "todo.json"), "utf8"));
+  check(onDisk.items.some((t) => t.id === a.id && t.text === "e2e task A (edited)"), "todo list is saved to res://.mcf_todo/todo.json right away");
   await call("todo_update", { id: "nope", status: "done" }, { expectError: true });
   await call("todo_add", { text: "   " }, { expectError: true });
   const removed = await call("todo_remove", { ids: [a.id, b.id] });
   check(removed.removed === 2, "todo_remove deletes the tasks");
+} else {
+  for (const [name, args] of [["todo_list", {}], ["todo_add", { text: "x" }], ["todo_update", { id: "x", status: "done" }], ["todo_remove", { id: "x" }]]) {
+    const text = await call(name, args, { expectError: true });
+    check(String(text).includes("MCF Todo addon is not installed"), `${name} explains that the MCF Todo addon is missing`);
+  }
 }
 
 // Error paths

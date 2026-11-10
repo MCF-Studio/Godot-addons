@@ -1,5 +1,7 @@
 @tool
 extends TextEdit
+## Fichier partagé : copie IDENTIQUE dans MCF-Todo/addons/mcf_todo/ et Godot-MCP/addons/godot_mcp/
+## (chaque addon reste autonome). Toute modification se fait dans les deux ; Bundle-Todo-MCP/build.mjs vérifie.
 ## Multi-line input that grows with its content (up to `max_lines`, then scrolls).
 ## Enter submits, Shift+Enter inserts a new line, Escape emits `cancelled`.
 

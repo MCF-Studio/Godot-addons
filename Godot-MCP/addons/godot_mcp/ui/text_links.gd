@@ -1,5 +1,7 @@
 @tool
 extends RefCounted
+## Fichier partagé : copie IDENTIQUE dans MCF-Todo/addons/mcf_todo/ et Godot-MCP/addons/godot_mcp/
+## (chaque addon reste autonome). Toute modification se fait dans les deux ; Bundle-Todo-MCP/build.mjs vérifie.
 ## Clickable links in plain text: http(s) URLs and res:// paths (optionally followed by :line).
 
 static var _pattern: RegEx
@@ -61,7 +63,7 @@ static func open_resource(link: String) -> void:
 		path = link.left(colon)
 		line = int(link.substr(colon + 1))
 	if not ResourceLoader.exists(path) and not FileAccess.file_exists(path):
-		push_warning("[Godot MCP] File not found: " + path)
+		push_warning("File not found: " + path)
 		return
 	var ext := path.get_extension().to_lower()
 	if ext == "tscn" or ext == "scn":

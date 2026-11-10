@@ -3,8 +3,8 @@ extends PanelContainer
 ## One task of the todo list: grip (drag to reorder), check box, wrapped text, delete button.
 ## Double-click / F2 / Enter edits in place, Delete removes, Space ticks, Up/Down moves between rows.
 
-const AutoTextEdit = preload("../ui/auto_text_edit.gd")
-const TextLinks = preload("../ui/text_links.gd")
+const AutoTextEdit = preload("ui/auto_text_edit.gd")
+const TextLinks = preload("ui/text_links.gd")
 const TodoStore = preload("todo_store.gd")
 
 signal status_toggled(id: String)
@@ -13,7 +13,7 @@ signal edit_finished
 signal delete_requested(id: String)
 signal context_requested(id: String, screen_position: Vector2)
 
-const DRAG_KEY := "godot_mcp_todo"
+const DRAG_KEY := "mcf_todo_drag"
 ## Longer texts are folded to this many lines until the user asks for the rest.
 const COLLAPSED_LINES := 6
 const MARKER_NONE := 0

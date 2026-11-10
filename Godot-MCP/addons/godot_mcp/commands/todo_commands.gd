@@ -1,9 +1,11 @@
 @tool
 extends "base.gd"
-## MCP access to the todo dock. The store lives in the editor (server.todo_store), so the dock
-## updates immediately when a client adds or ticks a task.
+## MCP access to the todo list of the optional MCF Todo addon. Its TodoStore is published in Engine metadata
+## (see MCF-Todo/README.md), so the dock updates immediately when a client adds or ticks a task.
+## Without the addon every todo_* tool answers with a clear error instead of failing obscurely.
 
-const TodoStore = preload("../todo/todo_store.gd")
+const META_STORE := "mcf_todo_store"
+const NOT_AVAILABLE := "The MCF Todo addon is not installed or not enabled in this project (Project > Project Settings > Plugins)."
 const STATUSES := ["open", "doing", "done"]
 
 
@@ -15,9 +17,9 @@ func register(h: Dictionary) -> void:
 
 
 func _store():
-	var store = server.todo_store
+	var store = Engine.get_meta(META_STORE, null)
 	if store == null:
-		return err("The todo list is not available (plugin not fully started).")
+		return err(NOT_AVAILABLE)
 	return store
 
 
@@ -90,7 +92,7 @@ func todo_update(p: Dictionary):
 		return err("No todo with id '%s'. Use todo_list to see the ids." % id)
 	var fields := {}
 	if p.has("text"):
-		if TodoStore.clean_text(str(p["text"])).is_empty():
+		if str(p["text"]).strip_edges().is_empty():
 			return err("text cannot be empty. Use todo_remove to delete a task.")
 		fields["text"] = str(p["text"])
 	if p.has("status"):
