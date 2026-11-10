@@ -1,0 +1,13 @@
+; Projet de test du bundle : MCF Todo et Godot MCP actifs ensemble.
+; addons/mcf_todo et addons/godot_mcp sont des jonctions vers les deux addons du dépôt (voir README).
+config_version=5
+
+[application]
+
+config/name="Bundle Todo + MCP Test"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/mcf_todo/plugin.cfg")

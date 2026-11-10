@@ -1,0 +1,8 @@
+# Livrables assemblés par build.mjs
+dist/
+test_project/.godot/
+test_project/.mcf_todo/
+test_project/generated/
+# Jonctions vers les deux addons (voir README)
+test_project/addons/
+*.zip
