@@ -22,6 +22,8 @@ const addonDir = (a) => path.join(a.dir, "addons", a.addon);
 const SHARED = ["dock_host.gd", "ui/auto_text_edit.gd", "ui/text_links.gd"];
 
 const problems = [];
+/** Fins de ligne ignorées : un clone Windows avec core.autocrlf extrait en CRLF. */
+const normalize = (text) => text.replace(/\r\n/g, "\n");
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -37,7 +39,7 @@ for (const rel of SHARED) {
   const a = path.join(addonDir(todo), rel);
   const b = path.join(addonDir(mcp), rel);
   if (!fs.existsSync(a) || !fs.existsSync(b)) problems.push(`fichier partagé absent : ${rel}`);
-  else if (!fs.readFileSync(a).equals(fs.readFileSync(b))) problems.push(`fichier partagé différent entre les deux addons : ${rel}`);
+  else if (normalize(fs.readFileSync(a, "utf8")) !== normalize(fs.readFileSync(b, "utf8"))) problems.push(`fichier partagé différent entre les deux addons : ${rel}`);
 }
 
 // 2. Pas d'UID Godot en double : deux addons installés dans le même projet se marcheraient dessus.
