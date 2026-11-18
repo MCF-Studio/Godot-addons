@@ -35,6 +35,9 @@ func get_editor_state(_p: Dictionary) -> Dictionary:
 
 func list_files(p: Dictionary):
 	var path := str(p.get("path", "res://"))
+	var bad_path := check_res_path(path)
+	if not bad_path.is_empty():
+		return err(bad_path)
 	if not DirAccess.dir_exists_absolute(path):
 		return err("Folder not found: " + path)
 	var exts := []

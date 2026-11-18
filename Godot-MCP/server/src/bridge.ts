@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import { editorOnPort } from "./editors.js";
 
 /** Raised when the editor addon cannot be reached (as opposed to a command failing inside Godot). */
 export class BridgeUnavailableError extends Error {}
@@ -14,8 +15,10 @@ interface Pending {
 
 /**
  * JSON-over-WebSocket client for the Godot editor addon.
- * Protocol: {id, method, params, token?} -> {id, result} | {id, error: {message}}
+ * Protocol: {id, method, params, token} -> {id, result} | {id, error: {message}}
  * Connects lazily on the first call and reconnects after a disconnect.
+ * Token: the explicit one (GODOT_MCP_TOKEN), else the one the editor listening on this port wrote to its
+ * session file (re-read at every call: it changes each time the editor restarts).
  */
 export class GodotBridge {
   private ws?: WebSocket;
@@ -33,7 +36,8 @@ export class GodotBridge {
     const ws = await this.connect();
     const id = this.nextId++;
     const payload: Record<string, unknown> = { id, method, params };
-    if (this.token) payload.token = this.token;
+    const token = this.token ?? editorOnPort(this.port())?.token;
+    if (token) payload.token = token;
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -58,6 +62,10 @@ export class GodotBridge {
     } catch {
       return false;
     }
+  }
+
+  port(): number {
+    return Number(new URL(this.url).port) || 80;
   }
 
   close(): void {

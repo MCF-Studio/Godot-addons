@@ -52,8 +52,8 @@ func open_scene(p: Dictionary):
 
 func create_scene(p: Dictionary):
 	var path := str(p.get("path", ""))
-	if not path.begins_with("res://") or not (path.ends_with(".tscn") or path.ends_with(".scn")):
-		return err("path must be a res:// path ending in .tscn")
+	if not check_res_path(path).is_empty() or not (path.ends_with(".tscn") or path.ends_with(".scn")):
+		return err("path must be a res:// path inside the project ending in .tscn")
 	var type := str(p.get("root_type", "Node2D"))
 	if not ClassDB.class_exists(type) or not ClassDB.is_parent_class(type, "Node") or not ClassDB.can_instantiate(type):
 		return err("'%s' is not an instantiable Node class." % type)
@@ -82,6 +82,8 @@ func save_scene(p: Dictionary):
 		return err("No scene is open in the editor.")
 	var path := str(p.get("path", ""))
 	if not path.is_empty():
+		if not check_res_path(path).is_empty() or not (path.ends_with(".tscn") or path.ends_with(".scn")):
+			return err("path must be a res:// path inside the project ending in .tscn")
 		if ensure_dir(path) != OK:
 			return err("Could not create folder " + path.get_base_dir())
 		EditorInterface.save_scene_as(path)

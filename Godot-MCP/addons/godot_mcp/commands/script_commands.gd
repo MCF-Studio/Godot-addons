@@ -10,8 +10,9 @@ func register(h: Dictionary) -> void:
 
 func create_script(p: Dictionary):
 	var path := str(p.get("path", ""))
-	if not path.begins_with("res://"):
-		return err("path must start with res://")
+	var bad_path := check_res_path(path)
+	if not bad_path.is_empty():
+		return err(bad_path)
 	var content := str(p.get("content", ""))
 	if not p.has("content"):
 		content = "extends %s\n\n\nfunc _ready() -> void:\n\tpass\n" % str(p.get("base_type", "Node"))
@@ -30,7 +31,7 @@ func create_script(p: Dictionary):
 	var valid := script != null and script.reload(true) == OK
 	var result := {"path": path, "valid": valid}
 	if not result["valid"]:
-		result["hint"] = "The script has errors; run check_script or get_editor_log for details."
+		result["hint"] = "The script has errors; run gdscript_diagnostics (or check_script) for the details."
 
 	if p.has("attach_to") and script:
 		var attached = attach_script({"node_path": p["attach_to"], "script_path": path})
@@ -42,6 +43,9 @@ func create_script(p: Dictionary):
 
 func read_script(p: Dictionary):
 	var path := str(p.get("path", ""))
+	var bad_path := check_res_path(path)
+	if not bad_path.is_empty():
+		return err(bad_path)
 	if not FileAccess.file_exists(path):
 		return err("File not found: " + path)
 	return {"path": path, "content": FileAccess.get_file_as_string(path)}

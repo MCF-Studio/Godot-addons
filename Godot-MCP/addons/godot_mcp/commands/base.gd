@@ -63,6 +63,17 @@ func refresh_file(path: String) -> void:
 		fs.update_file(path)
 
 
+## "" when `path` is a res:// path that stays inside the project, else the error to return.
+## Absolute paths and ".." segments would let a client read or write anywhere on disk.
+static func check_res_path(path: String) -> String:
+	if not path.begins_with("res://"):
+		return "path must start with res:// (got '%s')" % path
+	for part in path.trim_prefix("res://").replace("\\", "/").split("/"):
+		if part == "..":
+			return "path must stay inside the project ('..' is not allowed): " + path
+	return ""
+
+
 static func ensure_dir(res_path: String) -> int:
 	var dir := res_path.get_base_dir()
 	if DirAccess.dir_exists_absolute(dir):
