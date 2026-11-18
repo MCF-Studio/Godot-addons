@@ -122,6 +122,14 @@ Sans cet addon, les quatre tools répondent par une erreur explicite (« The MCF
 | `GODOT_LSP_PORT` / `GODOT_LSP_HOST` | Serveur de langage GDScript à utiliser, sans recherche | recherche automatique (voir [Analyse GDScript](#analyse-gdscript-lsp)) |
 | `GODOT_LSP_AUTOSTART` | `0` : ne jamais lancer d'éditeur headless pour le LSP | `1` |
 
+Pour Claude Code (terminal), ces variables se passent à l'ajout du serveur avec `-e`, par exemple :
+```bash
+claude mcp add godot -e GODOT_LSP_PORT=6005 -- node "…/godot-mcp-server.mjs"
+```
+ou dans le bloc `"env"` du serveur `godot` d'une config MCP existante (`~/.claude.json`, `.mcp.json`). Relancer la session (ou `/mcp`) pour qu'elles soient prises en compte.
+
+Avec `GODOT_LSP_PORT`, **seul ce port est essayé** : si rien n'y écoute, ou si l'éditeur sur ce port a un autre projet ouvert, les tools LSP renvoient une erreur (« Cannot use the Godot language server set by GODOT_LSP_PORT… ») au lieu de lancer un éditeur headless. Retirer la variable rétablit la recherche automatique.
+
 ## Sécurité
 
 - **Le WebSocket exige un jeton.** Écouter sur `127.0.0.1` ne suffit pas : une page web ouverte dans le navigateur peut ouvrir un WebSocket vers `127.0.0.1:6505`, et Godot ne permet pas de vérifier l'en-tête `Origin`. Sans jeton, une telle page pouvait piloter l'éditeur, donc écrire un script puis le lancer. Désormais chaque éditeur tire un jeton aléatoire à son démarrage et l'écrit dans un fichier de session (`<dossier de configuration>/Godot/godot_mcp/editor-<port>.json`, lisible par l'utilisateur seul sous macOS et Linux), supprimé à la fermeture. Le serveur MCP le lit tout seul ; une page web ne peut pas lire de fichier local. Un client sans le bon jeton est refusé et déconnecté.
