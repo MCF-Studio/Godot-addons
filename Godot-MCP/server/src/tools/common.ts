@@ -3,11 +3,14 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { GodotBridge } from "../bridge.js";
 import { assertProjectDir, type GodotCli } from "../cli.js";
+import type { LspManager } from "../lsp/locate.js";
 
 export interface Ctx {
   server: McpServer;
   bridge: GodotBridge;
   cli: GodotCli;
+  /** Godot's GDScript language server (editor's, or a headless editor started on demand). */
+  lsp: LspManager;
 }
 
 export function ok(data: unknown): CallToolResult {

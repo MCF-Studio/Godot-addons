@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import { listEditors } from "./editors.js";
 
 export interface RunResult {
   exitCode: number | null;
@@ -41,17 +42,19 @@ export class GodotCli {
   private cached?: string;
 
   /**
-   * GODOT_PATH (file) or `godot` on PATH. On Windows, prefers the sibling
-   * `*_console.exe` so stdout/stderr are actually captured.
+   * GODOT_PATH, else the executable of a running editor with the addon (its session file), else `godot`
+   * on PATH. On Windows, prefers the sibling `*_console.exe` so stdout/stderr are actually captured.
    */
   executable(): string {
     if (this.cached) return this.cached;
-    let exe = process.env.GODOT_PATH?.trim() || "godot";
+    const fromEditor = listEditors().find((e) => e.godot_executable && existsSync(e.godot_executable))?.godot_executable;
+    let exe = process.env.GODOT_PATH?.trim() || fromEditor || "godot";
     if (process.platform === "win32" && /\.exe$/i.test(exe) && !/_console\.exe$/i.test(exe)) {
       const consoleExe = exe.replace(/\.exe$/i, "_console.exe");
       if (existsSync(consoleExe)) exe = consoleExe;
     }
-    this.cached = exe;
+    // Only cache a deliberate choice: an editor started later can still provide its executable.
+    if (process.env.GODOT_PATH?.trim() || fromEditor) this.cached = exe;
     return exe;
   }
 
@@ -87,7 +90,7 @@ export class GodotCli {
 }
 
 /** The Windows console wrapper spawns the real Godot process, so the whole tree must go. */
-function killTree(pid: number | undefined): void {
+export function killTree(pid: number | undefined): void {
   if (!pid) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true });

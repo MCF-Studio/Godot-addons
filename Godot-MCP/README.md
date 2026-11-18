@@ -7,7 +7,10 @@ Le plugin ajoute aussi un **chat Claude** intégré à l'éditeur (voir [Chat Cl
 ```
 Client MCP ──stdio──▶ serveur MCP (Node ; livré en un seul fichier dans addons/godot_mcp/server/)
                          ├── WebSocket ws://127.0.0.1:6505 ──▶ addons/godot_mcp (plugin éditeur)
+                         ├── TCP 127.0.0.1:6005 ──▶ serveur de langage GDScript de Godot (LSP)
                          └── child_process ──▶ godot --headless … (CLI, sans éditeur)
+
+Claude Code ──stdio──▶ godot-mcp-server.mjs --lsp ──TCP──▶ LSP de Godot   (plugin « godot-gdscript-lsp »)
 ```
 
 - **Tools éditeur** : passent par le plugin, qui doit être actif dans l'éditeur ouvert. Toutes les modifications passent par l'undo/redo de Godot, donc **Ctrl+Z fonctionne**.
@@ -32,7 +35,42 @@ Le chat est déjà branché. Pour qu'un Claude lancé **à côté** (dans un ter
 - **Connecter Claude Code (terminal) à cet éditeur** copie la commande `claude mcp add godot -- node "…/godot-mcp-server.mjs"` ; colle-la dans un terminal ouvert dans le dossier du projet ;
 - **Connecter Claude Desktop à cet éditeur** copie le bloc JSON à ajouter dans `claude_desktop_config.json`.
 
-Le chemin du serveur est déjà rempli (et le port de l'éditeur si ce n'est pas 6505) : il n'y a rien à chercher.
+Le chemin du serveur est déjà rempli (et le port de l'éditeur si ce n'est pas 6505) : il n'y a rien à chercher. Le jeton de connexion n'a pas à être copié : le serveur le lit tout seul (voir [Sécurité](#sécurité)).
+
+## Analyse GDScript (LSP)
+
+Godot embarque un serveur de langage GDScript : le même moteur d'analyse que l'éditeur de scripts, qui connaît les `class_name`, les autoloads et toute l'API Godot. L'addon y donne accès de deux façons.
+
+**1. Tools MCP**, pour tout client MCP :
+
+| Tool | Description |
+|---|---|
+| `gdscript_diagnostics` | Erreurs et warnings d'un ou plusieurs scripts, ou de tout le projet (sans `paths` ; `addons/` exclu par défaut). Beaucoup plus rapide que `check_script` |
+| `gdscript_symbols` | Plan d'un script : classe, signaux, variables, constantes, fonctions avec signature et ligne |
+| `gdscript_definition` | Où un identifiant est déclaré, y compris dans un autre fichier |
+| `gdscript_references` | Toutes les utilisations d'un identifiant dans le projet |
+| `gdscript_hover` | Type, signature et documentation (API Godot comprise, dans la langue de l'éditeur) |
+
+Les positions se donnent par nom (`"symbol": "take_damage"`, `line` facultative) ou par `line` + `column` (comptées à partir de 1). `create_script` renvoie aussi les erreurs du script écrit (`diagnostics`) quand un serveur de langage est déjà disponible.
+
+**2. Plugin Claude Code `godot-gdscript-lsp`** : Claude Code reçoit les erreurs GDScript **automatiquement après chaque modification** d'un `.gd` et peut naviguer dans le code (outil `LSP` : définition, références, symboles…).
+- **Chat de l'éditeur** : actif d'office, rien à faire.
+- **Claude Code dans un terminal** : menu `⋯` du dock Claude > *Analyse GDScript (LSP) dans Claude Code (terminal)* copie deux commandes à lancer une fois ; le plugin vaut ensuite pour tous les projets :
+  ```bash
+  claude plugin marketplace add "<dossier de configuration>/Godot/godot_mcp/claude-plugins"
+  claude plugin install godot-gdscript-lsp@godot-mcp-local
+  ```
+  L'addon écrit ce plugin dans le dossier de configuration de l'utilisateur (`%APPDATA%` sous Windows, `~/Library/Application Support` sous macOS, `~/.config` sous Linux), avec sa propre copie du serveur, rafraîchie à chaque démarrage du chat. Il faut `node` dans le `PATH` du terminal.
+
+**Quel serveur de langage est utilisé**, dans cet ordre :
+1. `GODOT_LSP_PORT` s'il est défini ;
+2. celui de l'éditeur qui a **ce projet** ouvert (réglage *Réseau > Language Server > Remote Port*, 6005 par défaut) ;
+3. le port 6005, seulement si le projet ouvert là-bas est le bon ;
+4. sinon, un **éditeur headless** lancé pour l'occasion (`godot --headless --editor --lsp-port <port libre>`), avec l'exécutable de `GODOT_PATH` ou celui d'un éditeur déjà lancé. Compter quelques secondes au premier appel (plus si le projet n'a jamais été importé) ; ensuite les réponses sont immédiates. Pour les tools MCP, il s'arrête après 10 minutes sans requête ; pour le plugin, avec la session Claude Code. `GODOT_LSP_AUTOSTART=0` l'interdit.
+
+Un serveur de langage qui a **un autre projet** ouvert n'est jamais utilisé : ses réponses porteraient sur d'autres fichiers. Le plugin trouve le projet à partir du dossier ouvert par Claude Code : ce dossier, un parent, ou un sous-dossier jusqu'à 3 niveaux. Sans projet Godot, il reste inactif, sans erreur.
+
+Limites : un éditeur lancé avec `--lsp-port` n'est pas détectable (Godot cache ses propres options aux scripts) ; définir alors `GODOT_LSP_PORT`. Un éditeur headless ne surveille pas le disque : chaque requête relit le fichier interrogé, mais les références vers d'autres fichiers modifiés depuis son démarrage peuvent être en retard.
 
 ### Depuis les sources
 
@@ -77,12 +115,19 @@ Sans cet addon, les quatre tools répondent par une erreur explicite (« The MCF
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `GODOT_PATH` | Exécutable Godot pour les tools CLI. Sous Windows, le `*_console.exe` voisin est utilisé automatiquement. | `godot` dans le PATH |
-| `GODOT_PROJECT_PATH` | Projet par défaut des tools CLI | projet ouvert dans l'éditeur |
+| `GODOT_PATH` | Exécutable Godot pour les tools CLI et l'éditeur headless du LSP. Sous Windows, le `*_console.exe` voisin est utilisé automatiquement. | celui d'un éditeur lancé avec l'addon, sinon `godot` dans le PATH |
+| `GODOT_PROJECT_PATH` | Projet par défaut des tools CLI et LSP | projet ouvert dans l'éditeur |
 | `GODOT_MCP_PORT` | Port WebSocket (à définir aussi côté éditeur, ou via le paramètre projet `godot_mcp/port`) | `6505` |
-| `GODOT_MCP_TOKEN` | Jeton partagé optionnel (même valeur côté éditeur, ou paramètre projet `godot_mcp/token`) | aucun |
+| `GODOT_MCP_TOKEN` | Jeton fixe (même valeur côté éditeur, ou paramètre projet `godot_mcp/token`). Inutile en temps normal : voir [Sécurité](#sécurité) | jeton aléatoire à chaque démarrage |
+| `GODOT_LSP_PORT` / `GODOT_LSP_HOST` | Serveur de langage GDScript à utiliser, sans recherche | recherche automatique (voir [Analyse GDScript](#analyse-gdscript-lsp)) |
+| `GODOT_LSP_AUTOSTART` | `0` : ne jamais lancer d'éditeur headless pour le LSP | `1` |
 
-Le plugin n'écoute que sur `127.0.0.1`.
+## Sécurité
+
+- **Le WebSocket exige un jeton.** Écouter sur `127.0.0.1` ne suffit pas : une page web ouverte dans le navigateur peut ouvrir un WebSocket vers `127.0.0.1:6505`, et Godot ne permet pas de vérifier l'en-tête `Origin`. Sans jeton, une telle page pouvait piloter l'éditeur, donc écrire un script puis le lancer. Désormais chaque éditeur tire un jeton aléatoire à son démarrage et l'écrit dans un fichier de session (`<dossier de configuration>/Godot/godot_mcp/editor-<port>.json`, lisible par l'utilisateur seul sous macOS et Linux), supprimé à la fermeture. Le serveur MCP le lit tout seul ; une page web ne peut pas lire de fichier local. Un client sans le bon jeton est refusé et déconnecté.
+- **Les chemins restent dans le projet** : `create_script`, `read_script`, `create_scene`, `save_scene` et `list_files` refusent les chemins absolus et les `..`.
+- **Le serveur de langage de Godot (port 6005) n'a pas d'authentification.** Cela ne dépend pas de l'addon. Il n'écrit aucun fichier et n'exécute rien, mais il permet de lire les scripts du projet. Il n'écoute que sur `127.0.0.1` par défaut : ne change pas *Remote Host*.
+- **Le chat tourne sans demande d'autorisation** (voir l'avertissement de la section [Chat Claude](#chat-claude)).
 
 ## Tools
 
@@ -101,6 +146,7 @@ Le plugin n'écoute que sur `127.0.0.1`.
 | `run_project` / `run_current_scene` / `stop_project` | F5 / F6 / Stop |
 | `list_files` / `search_classes` / `get_class_info` | Exploration du projet et de l'API Godot |
 | `get_editor_log` | Messages et erreurs de l'éditeur (4.5+) |
+| `gdscript_diagnostics` / `gdscript_symbols` / `gdscript_definition` / `gdscript_references` / `gdscript_hover` | Analyse GDScript par le LSP de Godot (éditeur ouvert, ou headless lancé à la demande) : voir [Analyse GDScript](#analyse-gdscript-lsp) |
 | `todo_list` / `todo_add` / `todo_update` / `todo_remove` | La todo de l'addon **MCF Todo** (si actif) : lire, ajouter, changer le texte / le statut (`open`, `doing`, `done`) / la position, supprimer |
 
 **CLI** (sans éditeur)
@@ -139,6 +185,8 @@ godot --headless --editor --path test_project
 cd server && GODOT_PATH=... npm run test:e2e
 ```
 
+Si un autre éditeur Godot est déjà ouvert sur la machine, il occupe les ports 6505 et 6005 : lance l'éditeur de test avec `GODOT_MCP_PORT=6595 godot --headless --editor --lsp-port 6095 --path test_project`, puis le test avec `GODOT_MCP_PORT=6595 GODOT_LSP_PORT=6095`.
+
 Ce test vérifie que les tools `todo_*` répondent par l'erreur « addon non installé ». Le cas où MCF Todo est actif se teste avec le projet du [bundle](../Bundle-Todo-MCP/) (`E2E_PROJECT` et `E2E_EXPECT_TODO=1`, voir son README).
 
 Tests unitaires (conversion Markdown, liens, outils de session ; sans éditeur) :
@@ -152,10 +200,13 @@ Pour tester les tools à la main : `npm run inspector` (MCP Inspector).
 ### Structure
 ```
 server/                 sources du serveur MCP (TypeScript) — pas livré tel quel
-  src/index.ts          point d'entrée (stdio)
-  src/bridge.ts         client WebSocket vers le plugin
+  src/index.ts          point d'entrée : serveur MCP (défaut) ou pont LSP (--lsp)
+  src/mcp.ts            serveur MCP (stdio)
+  src/bridge.ts         client WebSocket vers le plugin (jeton lu dans le fichier de session)
+  src/editors.ts        fichiers de session des éditeurs (jeton, projet, port LSP, exécutable)
   src/cli.ts            wrapper de l'exécutable Godot
-  src/tools/            définition des tools (zod)
+  src/lsp/              client du LSP de Godot, choix du serveur / éditeur headless, pont stdio
+  src/tools/            définition des tools (zod) ; lsp.ts = tools gdscript_*
   scripts/bundle.mjs    embarque le serveur et ses dépendances en UN fichier dans l'addon (esbuild) + licences
 addons/godot_mcp/
   server/               serveur livré avec l'addon : godot-mcp-server.mjs et THIRD-PARTY-LICENSES.txt (générés,
@@ -165,7 +216,8 @@ addons/godot_mcp/
   mcp_logger.gd   capture du log éditeur (4.5+)
   dock_host.gd    ajoute un contrôle comme dock (EditorDock 4.6+, ancienne API avant) — copie partagée avec MCF Todo
   commands/       implémentation des commandes (une classe par domaine ; todo_commands.gd = pont vers MCF Todo)
-  chat/           dock Claude : claude_session.gd (processus claude), chat_panel.gd, markdown.gd
+  chat/           dock Claude : claude_session.gd (processus claude), chat_panel.gd, markdown.gd,
+                  lsp_plugin.gd (plugin Claude Code « godot-gdscript-lsp »)
   ui/             auto_text_edit.gd (saisie qui grandit), text_links.gd (URL et res:// cliquables) — copies partagées avec MCF Todo
 ```
 

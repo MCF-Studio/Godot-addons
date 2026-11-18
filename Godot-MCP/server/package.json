@@ -1,6 +1,6 @@
 {
   "name": "godot-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for controlling the Godot 4 editor and CLI",
   "type": "module",
   "bin": {

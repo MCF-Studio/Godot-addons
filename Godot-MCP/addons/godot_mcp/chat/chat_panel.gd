@@ -12,6 +12,7 @@ const MENU_PICK_SERVER := 1
 const MENU_PICK_CLAUDE := 2
 const MENU_COPY_TERMINAL := 3
 const MENU_COPY_DESKTOP := 4
+const MENU_COPY_LSP := 5
 const MAX_RESULT_CHARS := 4000
 const GREEN := Color(0.45, 0.8, 0.45)
 const ORANGE := Color(1.0, 0.7, 0.25)
@@ -114,6 +115,7 @@ func _build() -> void:
 	var popup := _menu.get_popup()
 	popup.add_item("Connecter Claude Code (terminal) à cet éditeur : copier la commande", MENU_COPY_TERMINAL)
 	popup.add_item("Connecter Claude Desktop à cet éditeur : copier la config", MENU_COPY_DESKTOP)
+	popup.add_item("Analyse GDScript (LSP) dans Claude Code (terminal) : copier les commandes d'installation", MENU_COPY_LSP)
 	popup.add_separator()
 	popup.add_item("Reprendre cette conversation dans un terminal : copier la commande", MENU_COPY_RESUME)
 	popup.add_separator()
@@ -527,6 +529,15 @@ func _on_menu(id: int) -> void:
 			if not server.is_empty():
 				var command := ClaudeSession.terminal_command(server, _editor_port())
 				_copy_to_clipboard(command, "Copié. Colle-le dans un terminal ouvert dans le dossier du projet (%s) :\n%s\nIl faut Node.js sur cette machine." % [session.project_dir(), command])
+		MENU_COPY_LSP:
+			var server := _server_for_connect()
+			if not server.is_empty():
+				var result := ClaudeSession.LspPlugin.install(server)
+				if str(result["dir"]).is_empty():
+					_add_notice("Impossible de préparer le plugin LSP : " + str(result["error"]), true)
+				else:
+					_copy_to_clipboard(ClaudeSession.LspPlugin.install_commands(), "Copié. Lance ces deux commandes une fois dans un terminal : Claude Code verra alors les erreurs GDScript après chaque modification d'un .gd, dans tous tes projets Godot (il faut Node.js dans le PATH).
+" + ClaudeSession.LspPlugin.install_commands())
 		MENU_COPY_DESKTOP:
 			var server := _server_for_connect()
 			if not server.is_empty():

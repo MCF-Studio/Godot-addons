@@ -4,6 +4,25 @@ import { z } from "zod";
 import { BridgeUnavailableError } from "../bridge.js";
 import { resToFs } from "../cli.js";
 import { bridgeTool, guard, projectPathField, resolveProject, type Ctx } from "./common.js";
+import { quickDiagnostics } from "./lsp.js";
+
+/** Adds the language server's diagnostics of the written file to create_script's answer, when available. */
+async function withDiagnostics(ctx: Ctx, projectPath: string | undefined, resPath: string, result: unknown): Promise<unknown> {
+  if (!resPath.endsWith(".gd") || !result || typeof result !== "object") return result;
+  let project: string;
+  try {
+    project = await resolveProject(ctx, projectPath);
+  } catch {
+    return result;
+  }
+  const diagnostics = await quickDiagnostics(ctx, project, resToFs(project, resPath));
+  if (!diagnostics) return result;
+  const errors = diagnostics.filter((d) => d.severity === "error").length;
+  const out: Record<string, unknown> = { ...(result as Record<string, unknown>), diagnostics };
+  if (errors === 0) delete out.hint;
+  else out.hint = `${errors} error(s) reported by Godot's language server: fix them and write the script again.`;
+  return out;
+}
 
 export function registerScriptTools(ctx: Ctx): void {
   ctx.server.registerTool(
@@ -11,7 +30,8 @@ export function registerScriptTools(ctx: Ctx): void {
     {
       description:
         "Creates or overwrites a GDScript file. With the editor connected, the script is reloaded and can be attached to a node at once; " +
-        "otherwise the file is written directly to disk (project_path required).",
+        "otherwise the file is written directly to disk (project_path required). " +
+        "The answer includes the errors and warnings of Godot's language server (`diagnostics`) when it is available.",
       inputSchema: {
         path: z.string().describe('Script path, e.g. "res://scripts/player.gd".'),
         content: z.string().optional().describe("Full source code. If omitted, a minimal template extending base_type is written."),
@@ -24,7 +44,7 @@ export function registerScriptTools(ctx: Ctx): void {
       guard(async () => {
         const { project_path, ...params } = args;
         try {
-          return await ctx.bridge.call("create_script", params);
+          return await withDiagnostics(ctx, project_path, params.path, await ctx.bridge.call("create_script", params));
         } catch (e) {
           if (!(e instanceof BridgeUnavailableError)) throw e;
           if (params.attach_to) throw e;
@@ -33,7 +53,7 @@ export function registerScriptTools(ctx: Ctx): void {
           const source = params.content ?? `extends ${params.base_type}\n\n\nfunc _ready() -> void:\n\tpass\n`;
           await mkdir(path.dirname(file), { recursive: true });
           await writeFile(file, source, "utf8");
-          return { path: params.path, written_to: file, via: "filesystem (editor not connected)" };
+          return withDiagnostics(ctx, project_path, params.path, { path: params.path, written_to: file, via: "filesystem (editor not connected)" });
         }
       }),
   );

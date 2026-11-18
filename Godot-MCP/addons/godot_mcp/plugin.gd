@@ -21,6 +21,11 @@ var _todo_action := {}
 
 
 func _enter_tree() -> void:
+	# Headless editor started by the MCP server only for its GDScript language server: no WebSocket
+	# server (it would take a port meant for the user's editor) and no chat.
+	if OS.get_environment("GODOT_MCP_LSP_ONLY") == "1":
+		print("[Godot MCP] language-server-only editor: plugin idle")
+		return
 	_register_editor_settings()
 	_server = WsServer.new(self)
 	_server.start()
@@ -28,6 +33,7 @@ func _enter_tree() -> void:
 	# Chat : panneau du bas par défaut ; le dock se déplace n'importe où ou passe en fenêtre flottante.
 	_session = ClaudeSession.new()
 	_session.godot_port = _server.listening_port
+	_session.godot_token = _server.token()
 	_chat_panel = ChatPanel.new(_session)
 	_chat_dock = DockHost.new(self, _chat_panel, "Claude", "GodotMCP_Claude", DockHost.SLOT_BOTTOM, "RichTextLabel")
 	_register_todo_action()

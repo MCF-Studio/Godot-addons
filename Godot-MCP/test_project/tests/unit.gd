@@ -6,6 +6,8 @@ extends SceneTree
 const Markdown = preload("res://addons/godot_mcp/chat/markdown.gd")
 const TextLinks = preload("res://addons/godot_mcp/ui/text_links.gd")
 const ClaudeSession = preload("res://addons/godot_mcp/chat/claude_session.gd")
+const LspPlugin = preload("res://addons/godot_mcp/chat/lsp_plugin.gd")
+const Commands = preload("res://addons/godot_mcp/commands/base.gd")
 
 var failures := 0
 
@@ -22,6 +24,8 @@ func _initialize() -> void:
 	_test_session_helpers()
 	_test_server_selection()
 	_test_connect_helpers()
+	_test_lsp_plugin()
+	_test_res_paths()
 	print("
 " + ("%d FAILURE(S)" % failures if failures else "ALL PASSED"))
 	quit(1 if failures else 0)
@@ -103,3 +107,32 @@ func _test_connect_helpers() -> void:
 	check(custom_port["mcpServers"]["godot"]["env"]["GODOT_MCP_PORT"] == "6508", "connexion Claude Desktop: un autre port est transmis dans env")
 	var node := ClaudeSession.find_node()
 	check(node.is_empty() or FileAccess.file_exists(node), "find_node(): renvoie un fichier existant, ou rien, sans lancer de processus")
+
+
+func _test_lsp_plugin() -> void:
+	var lsp: Dictionary = LspPlugin.lsp_config()["gdscript"]
+	check(lsp["command"] == "node" and not " " in lsp["command"], "plugin LSP: commande sans espace (Claude Code refuse « C:/Program Files/... »)")
+	check(lsp["args"] == ["${CLAUDE_PLUGIN_ROOT}/server/godot-mcp-server.mjs", "--lsp"], "plugin LSP: lance le serveur copié dans le plugin en mode --lsp")
+	check(lsp["extensionToLanguage"] == {".gd": "gdscript"}, "plugin LSP: associé aux fichiers .gd")
+	var allowed := ["command", "extensionToLanguage", "args", "transport", "env", "initializationOptions", "settings", "workspaceFolder", "startupTimeout", "shutdownTimeout", "requestTimeout", "restartOnCrash", "maxRestarts", "diagnostics"]
+	var unknown := lsp.keys().filter(func(k): return not k in allowed)
+	check(unknown.is_empty(), "plugin LSP: aucune clé inconnue (Claude Code refuserait le plugin) %s" % [unknown])
+	var market: Dictionary = LspPlugin.marketplace_manifest()
+	check(market["plugins"][0]["name"] == LspPlugin.PLUGIN_NAME and market["plugins"][0]["source"] == "./" + LspPlugin.PLUGIN_NAME, "plugin LSP: le marketplace local pointe vers le dossier du plugin")
+	check(not "claude" in LspPlugin.PLUGIN_NAME, "plugin LSP: nom non réservé par Claude Code")
+	check(LspPlugin.install_commands().contains('marketplace add "%s"' % LspPlugin.marketplace_dir()) and LspPlugin.install_commands().contains("install godot-gdscript-lsp@godot-mcp-local"), "plugin LSP: commandes d'installation pour le terminal")
+
+	var win_path := "C:\\Windows;c:\\program files\\NODEJS\\;D:\\x"
+	check(LspPlugin.path_with_node("C:/Program Files/nodejs/node.exe", win_path, true) == "", "PATH: Node déjà présent (casse et \\ final ignorés) = inchangé")
+	check(LspPlugin.path_with_node("C:/Users/a b/node/node.exe", "C:\\Windows", true) == "C:\\Users\\a b\\node;C:\\Windows", "PATH: dossier de Node ajouté en tête, au format Windows")
+	check(LspPlugin.path_with_node("/opt/node/bin/node", "/usr/bin", false) == "/opt/node/bin:/usr/bin", "PATH: séparateur « : » hors Windows")
+	check(LspPlugin.path_with_node("", "/usr/bin", false) == "", "PATH: sans Node trouvé, rien ne change")
+
+
+func _test_res_paths() -> void:
+	check(Commands.check_res_path("res://scripts/player.gd") == "", "chemins: res:// dans le projet accepté")
+	check(Commands.check_res_path("res://a/../b.gd") != "", "chemins: « .. » refusé")
+	check(Commands.check_res_path("res://..\\x.gd") != "", "chemins: « ..\\ » refusé (séparateur Windows)")
+	check(Commands.check_res_path("C:/Windows/win.ini") != "", "chemins: chemin absolu refusé")
+	check(Commands.check_res_path("user://x.cfg") != "", "chemins: user:// refusé")
+	check(Commands.check_res_path("res://a..b/c.gd") == "", "chemins: « .. » au milieu d'un nom n'est pas un dossier parent")

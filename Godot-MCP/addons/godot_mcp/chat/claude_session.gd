@@ -19,6 +19,8 @@ signal turn_finished(result: Dictionary)
 signal notice(message: String, is_error: bool)
 signal state_changed
 
+const LspPlugin = preload("lsp_plugin.gd")
+
 const SETTING_CLAUDE_PATH := "godot_mcp/claude_path"
 ## Advanced override: another MCP server file. Normally unused: the addon ships its own (BUNDLED_SERVER).
 const SETTING_SERVER_PATH := "godot_mcp/server_path"
@@ -52,6 +54,10 @@ var last_error := ""
 ## Port of this editor's WebSocket server (0 = not listening). The MCP server given to claude must use
 ## it, otherwise a second editor open on another project would drive the first one.
 var godot_port := 0
+## Token of this editor's WebSocket server, handed to the MCP server given to claude.
+var godot_token := ""
+## Folder of the GDScript language-server plugin handed to claude (--plugin-dir), "" when unavailable.
+var lsp_plugin_dir := ""
 ## Which MCP server file the chat hands to claude: {"path": String, "source": "setting" | "bundled" | ""}.
 ## Empty source = none found. Filled by refresh_server_info() (and at each start of claude).
 var server_info := {"path": "", "source": ""}
@@ -238,6 +244,8 @@ func _build_args() -> PackedStringArray:
 	var mcp_config := _write_mcp_config()
 	if not mcp_config.is_empty():
 		args.append_array(["--mcp-config", mcp_config])
+	if not lsp_plugin_dir.is_empty():
+		args.append_array(["--plugin-dir", lsp_plugin_dir])
 	var settings := EditorInterface.get_editor_settings()
 	if settings.has_setting(SETTING_EXTRA_ARGS):
 		args.append_array(split_args(str(settings.get_setting(SETTING_EXTRA_ARGS))))
@@ -316,13 +324,13 @@ func _write_mcp_config() -> String:
 	node_ok = not node.is_empty()
 	if not node_ok:
 		return ""
+	_prepare_lsp_plugin(node)
 	var env := {"GODOT_MCP_PORT": str(godot_port)}
-	var token := OS.get_environment("GODOT_MCP_TOKEN")
-	if token.is_empty() and ProjectSettings.has_setting("godot_mcp/token"):
-		token = str(ProjectSettings.get_setting("godot_mcp/token"))
-	if not token.is_empty():
-		env["GODOT_MCP_TOKEN"] = token
+	if not godot_token.is_empty():
+		env["GODOT_MCP_TOKEN"] = godot_token
 	env["GODOT_PROJECT_PATH"] = project_dir()
+	# The CLI tools (run_and_capture, check_script, export) and the language server use this very Godot.
+	env["GODOT_PATH"] = OS.get_executable_path()
 	var config := {"mcpServers": {"godot": {"command": node, "args": [server_info["path"]], "env": env}}}
 	var file := FileAccess.open(MCP_CONFIG_FILE, FileAccess.WRITE)
 	if file == null:
@@ -330,6 +338,20 @@ func _write_mcp_config() -> String:
 	file.store_string(JSON.stringify(config))
 	file.close()
 	return ProjectSettings.globalize_path(MCP_CONFIG_FILE)
+
+
+## Writes the GDScript language-server plugin and makes `node` reachable through PATH for it.
+## Never blocks the chat: on failure claude simply runs without it.
+func _prepare_lsp_plugin(node: String) -> void:
+	lsp_plugin_dir = ""
+	var result := LspPlugin.install(str(server_info["path"]))
+	if str(result["dir"]).is_empty():
+		push_warning("[Godot MCP] GDScript language server not given to Claude: " + str(result["error"]))
+		return
+	var new_path := LspPlugin.path_with_node(node, OS.get_environment("PATH"), OS.get_name() == "Windows")
+	if not new_path.is_empty():
+		OS.set_environment("PATH", new_path)
+	lsp_plugin_dir = str(result["dir"])
 
 
 func _write(message: Dictionary) -> void:
